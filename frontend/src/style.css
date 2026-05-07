@@ -13,11 +13,53 @@
   --accent: #2563eb;
   --accent-soft: #eaf2ff;
   --danger: #dc2626;
+  --surface: #ffffff;
+  --control-bg: #ffffff;
+  --control-hover: #f0f0f0;
+  --text-strong: #111111;
+  --shadow: rgba(0, 0, 0, 0.18);
+  --overlay: rgba(20, 20, 20, 0.28);
+  --progress-rail: #d7d7d7;
+  --scrollbar-thumb: #cfcfcf;
+  --search-hit-bg: #fff3a3;
+  --search-hit-text: inherit;
+  --focus-ring: rgba(37, 99, 235, 0.10);
+  --danger-soft: rgba(220, 38, 38, 0.08);
+  --danger-border: rgba(220, 38, 38, 0.18);
   --radius-lg: 6px;
   --radius-md: 4px;
   font-family: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111827;
+  --chrome: #1f2937;
+  --chrome-strong: #273244;
+  --sidebar: #182230;
+  --border: #374151;
+  --border-strong: #4b5563;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --muted-strong: #d1d5db;
+  --accent: #60a5fa;
+  --accent-soft: rgba(96, 165, 250, 0.18);
+  --danger: #f87171;
+  --surface: #111827;
+  --control-bg: #111827;
+  --control-hover: #273244;
+  --text-strong: #f9fafb;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --overlay: rgba(0, 0, 0, 0.52);
+  --progress-rail: #374151;
+  --scrollbar-thumb: #4b5563;
+  --search-hit-bg: #854d0e;
+  --search-hit-text: #fef3c7;
+  --focus-ring: rgba(96, 165, 250, 0.20);
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --danger-border: rgba(248, 113, 113, 0.25);
 }
 
 * {
@@ -54,7 +96,7 @@ input,
 select {
   height: 30px;
   border-radius: var(--radius-md);
-  background: #ffffff;
+  background: var(--control-bg);
   color: var(--text);
   padding: 0 8px;
   transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
@@ -62,9 +104,9 @@ select {
 
 input:focus,
 select:focus {
-  border-color: rgba(37, 99, 235, 0.55);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.10);
-  background: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+  background: var(--control-bg);
 }
 
 button {
@@ -73,13 +115,13 @@ button {
   padding: 0 10px;
   cursor: pointer;
   color: var(--text);
-  background: #ffffff;
+  background: var(--control-bg);
   transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
 }
 
 button:hover {
   border-color: var(--border-strong);
-  background: #f0f0f0;
+  background: var(--control-hover);
 }
 
 button:disabled {
@@ -104,7 +146,7 @@ button:disabled {
   min-height: 0;
   padding: 0 10px;
   border-bottom: 1px solid var(--border);
-  background: #ffffff;
+  background: var(--control-bg);
 }
 
 .menu-strip,
@@ -130,12 +172,12 @@ button:disabled {
   border: 0;
   border-radius: 2px;
   background: transparent;
-  color: #333333;
+  color: var(--muted-strong);
   font-size: 12px;
 }
 
 .menu-item:hover {
-  background: #e9e9e9;
+  background: var(--control-hover);
 }
 
 .menu-dropdown {
@@ -146,10 +188,10 @@ button:disabled {
   display: none;
   width: 226px;
   padding: 8px 0;
-  border: 1px solid #d7d7d7;
+  border: 1px solid var(--border);
   border-radius: 0 0 8px 8px;
-  background: #ffffff;
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18);
+  background: var(--control-bg);
+  box-shadow: 0 14px 28px var(--shadow);
 }
 
 .menu-dropdown.open {
@@ -171,7 +213,7 @@ button:disabled {
 }
 
 .menu-command:hover {
-  background: #eaf2ff;
+  background: var(--accent-soft);
 }
 
 .menu-command kbd {
@@ -241,20 +283,20 @@ button:disabled {
 .button.ghost,
 .button.subtle,
 .button.icon-button {
-  background: #ffffff;
+  background: var(--control-bg);
   color: var(--muted-strong);
 }
 
 .button.primary {
   border-color: var(--border-strong);
-  color: #111111;
+  color: var(--text-strong);
 }
 
 .workspace {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
   min-height: 0;
-  background: #ffffff;
+  background: var(--control-bg);
 }
 
 .side-panel {
@@ -284,9 +326,9 @@ button:disabled {
 }
 
 .side-tab.active {
-  color: #111111;
+  color: var(--text-strong);
   font-weight: 700;
-  box-shadow: inset 0 -2px 0 #333333;
+  box-shadow: inset 0 -2px 0 var(--text-strong);
 }
 
 .side-section {
@@ -327,7 +369,7 @@ button:disabled {
 
 .folder-file:hover,
 .folder-file.active {
-  background: #eeeeee;
+  background: var(--control-hover);
 }
 
 .folder-file-name {
@@ -349,7 +391,7 @@ button:disabled {
   place-items: center;
   height: 100%;
   min-height: 160px;
-  color: #111111;
+  color: var(--text-strong);
   font-size: 13px;
 }
 
@@ -371,7 +413,7 @@ button:disabled {
 
 .open-file-button:hover,
 .open-folder-button:hover {
-  background: #eeeeee;
+  background: var(--control-hover);
 }
 
 .commandbar {
@@ -410,7 +452,7 @@ button:disabled {
 .command-input,
 .compact-input {
   border: 1px solid var(--border);
-  background: #ffffff;
+  background: var(--control-bg);
   box-shadow: none;
 }
 
@@ -459,7 +501,7 @@ button:disabled {
   grid-template-rows: auto auto auto minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--control-bg);
 }
 
 .searchbar {
@@ -470,7 +512,7 @@ button:disabled {
   min-height: 44px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
-  background: #ffffff;
+  background: var(--control-bg);
 }
 
 .search-input {
@@ -489,7 +531,7 @@ button:disabled {
   min-height: 0;
   max-height: 170px;
   border-bottom: 1px solid var(--border);
-  background: #ffffff;
+  background: var(--control-bg);
   overflow: hidden;
 }
 
@@ -503,7 +545,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  color: #111111;
+  color: var(--text-strong);
   font-size: 12px;
   font-weight: 650;
 }
@@ -518,7 +560,7 @@ button:disabled {
 
 .reader-surface {
   min-height: 0;
-  background: #ffffff;
+  background: var(--control-bg);
   overflow: hidden;
 }
 
@@ -528,8 +570,8 @@ button:disabled {
   padding: 0;
   overflow: auto;
   color: var(--text);
-  background: #ffffff;
-  scrollbar-color: #cfcfcf transparent;
+  background: var(--control-bg);
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .reader.empty {
@@ -606,13 +648,13 @@ button:disabled {
 }
 
 .panel-tab.active {
-  color: #111111;
+  color: var(--text-strong);
   background: transparent;
-  box-shadow: inset 0 -2px 0 #333333;
+  box-shadow: inset 0 -2px 0 var(--text-strong);
 }
 
 .panel-tab:hover {
-  background: #eeeeee;
+  background: var(--control-hover);
 }
 
 .search-results,
@@ -700,12 +742,12 @@ button:disabled {
 .search-result:hover,
 .bookmark:hover,
 .bookmark-main:hover {
-  background: #eeeeee;
+  background: var(--control-hover);
 }
 
 .bookmark-delete:hover {
-  border-color: rgba(220, 38, 38, 0.18);
-  background: rgba(220, 38, 38, 0.08);
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
 }
 
 .search-result.active {
@@ -797,7 +839,7 @@ button:disabled {
   height: 3px;
   overflow: hidden;
   border-radius: 999px;
-  background: #d7d7d7;
+  background: var(--progress-rail);
 }
 
 .progress-bar {
@@ -841,8 +883,8 @@ button:disabled {
 .search-hit {
   padding: 1px 3px;
   border-radius: 3px;
-  background: #fff3a3;
-  color: inherit;
+  background: var(--search-hit-bg);
+  color: var(--search-hit-text);
 }
 
 .search-hit.mini {
@@ -856,7 +898,7 @@ button:disabled {
   display: none;
   place-items: center;
   padding: 28px;
-  background: rgba(20, 20, 20, 0.28);
+  background: var(--overlay);
   backdrop-filter: blur(2px);
 }
 
@@ -868,10 +910,10 @@ button:disabled {
   position: relative;
   width: min(440px, 100%);
   padding: 28px 30px 24px;
-  border: 1px solid rgba(0, 0, 0, 0.10);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+  background: var(--control-bg);
+  box-shadow: 0 24px 60px var(--shadow);
   text-align: center;
 }
 
@@ -890,7 +932,7 @@ button:disabled {
 }
 
 .about-close-icon:hover {
-  background: #eeeeee;
+  background: var(--control-hover);
   color: var(--text);
 }
 
@@ -911,7 +953,7 @@ button:disabled {
 
 .about-title {
   margin: 0;
-  color: #111111;
+  color: var(--text-strong);
   font-size: 23px;
   line-height: 1.2;
 }

@@ -28,8 +28,10 @@ const LOAD_THRESHOLD_PX = 600;
 const PREFETCH_THRESHOLD_PX = 1400;
 const LEGACY_LANG_STORAGE_KEY = "bf-reader.language";
 const LEGACY_FONT_SIZE_STORAGE_KEY = "bf-reader.fontSize";
+const LEGACY_THEME_STORAGE_KEY = "bf-reader.theme";
 const LANG_STORAGE_KEY = "bigtext-reader.language";
 const FONT_SIZE_STORAGE_KEY = "bigtext-reader.fontSize";
+const THEME_STORAGE_KEY = "bigtext-reader.theme";
 const DEFAULT_PAGE_SIZE = 60;
 
 const messages = {
@@ -57,6 +59,9 @@ const messages = {
     "toolbar.next": "下段",
     "toolbar.encoding": "编码",
     "toolbar.fontSize": "字号",
+    "toolbar.theme": "主题",
+    "theme.light": "浅色",
+    "theme.dark": "深色",
     "search.placeholder": "搜索关键字，回车查找",
     "search.find": "查找",
     "search.prev": "上一个",
@@ -136,6 +141,9 @@ const messages = {
     "toolbar.next": "Next",
     "toolbar.encoding": "Encoding",
     "toolbar.fontSize": "Font",
+    "toolbar.theme": "Theme",
+    "theme.light": "Light",
+    "theme.dark": "Dark",
     "search.placeholder": "Search keyword, press Enter",
     "search.find": "Find",
     "search.prev": "Previous",
@@ -215,6 +223,27 @@ function loadFontSize() {
   const value = clampFontSize(Number(stored) || 16.5);
   if (stored && !localStorage.getItem(FONT_SIZE_STORAGE_KEY)) {
     localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(value));
+  }
+  return value;
+}
+
+function normalizeTheme(theme) {
+  return theme === "dark" ? "dark" : "light";
+}
+
+function getSystemTheme() {
+  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches
+    ? "dark"
+    : "light";
+}
+
+function loadTheme() {
+  const stored =
+    localStorage.getItem(THEME_STORAGE_KEY) ??
+    localStorage.getItem(LEGACY_THEME_STORAGE_KEY);
+  const value = normalizeTheme(stored || getSystemTheme());
+  if (stored && !localStorage.getItem(THEME_STORAGE_KEY)) {
+    localStorage.setItem(THEME_STORAGE_KEY, value);
   }
   return value;
 }
@@ -312,6 +341,13 @@ app.innerHTML = `
           <label class="mini-field"><span data-i18n="toolbar.fontSize">字号</span>
             <input id="fontSize" type="number" min="12" max="32" step="0.5" value="16.5" />
           </label>
+
+          <label class="mini-field"><span data-i18n="toolbar.theme">主题</span>
+            <select id="themeSelect">
+              <option value="light" data-i18n="theme.light">浅色</option>
+              <option value="dark" data-i18n="theme.dark">深色</option>
+            </select>
+          </label>
         </section>
 
         <section class="searchbar">
@@ -396,6 +432,7 @@ const state = {
   suppressScroll: false,
   saveTimer: null,
   fontSize: loadFontSize(),
+  theme: loadTheme(),
   searchMatch: null,
   lastSearchKeyword: "",
   lastSearchHitOffset: -1,
@@ -436,6 +473,7 @@ const el = {
   filePath: document.querySelector("#filePath"),
   encoding: document.querySelector("#encoding"),
   fontSize: document.querySelector("#fontSize"),
+  themeSelect: document.querySelector("#themeSelect"),
   prevPage: document.querySelector("#prevPage"),
   nextPage: document.querySelector("#nextPage"),
   jumpInput: document.querySelector("#jumpInput"),
@@ -485,6 +523,7 @@ el.openFolderButton.addEventListener("click", () => run(selectAndOpenFolder));
 el.encoding.addEventListener("change", () => run(changeEncoding));
 el.fontSize.addEventListener("change", changeFontSize);
 el.fontSize.addEventListener("input", changeFontSize);
+el.themeSelect.addEventListener("change", changeTheme);
 el.nextPage.addEventListener("click", () => run(loadNext));
 el.prevPage.addEventListener("click", () => run(loadPrevious));
 el.jumpButton.addEventListener("click", () => run(jump));
@@ -513,7 +552,9 @@ el.jumpInput.addEventListener("keydown", (event) => {
 window.addEventListener("click", () => closeFileMenu());
 el.languageSelect.value = state.language;
 el.fontSize.value = String(state.fontSize);
+el.themeSelect.value = state.theme;
 applyFontSize();
+applyTheme();
 applyLocale();
 run(() => SetLanguage(state.language));
 EventsOn("app:open-file", (path) => run(() => openFilePath(path)));
@@ -618,6 +659,17 @@ function changeFontSize() {
   el.fontSize.value = String(state.fontSize);
   localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(state.fontSize));
   applyFontSize();
+}
+
+function changeTheme() {
+  state.theme = normalizeTheme(el.themeSelect.value);
+  el.themeSelect.value = state.theme;
+  localStorage.setItem(THEME_STORAGE_KEY, state.theme);
+  applyTheme();
+}
+
+function applyTheme() {
+  document.documentElement.dataset.theme = state.theme;
 }
 
 function applyFontSize() {

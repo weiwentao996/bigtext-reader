@@ -29,6 +29,7 @@ large text file reader, big text reader, huge txt reader, log file reader, GB te
 - **Single-instance behavior**: opening a file through Windows routes it to the existing app window instead of creating a duplicate window.
 - **Hot encoding switch**: change encoding after opening a file without restarting the app.
 - **Adjustable font size**: tune the reading font size for long reading sessions.
+- **Dark mode**: switch between light and dark themes, with the first launch following the system preference.
 - **Internationalization**: built-in Simplified Chinese and English UI.
 - **Desktop app**: built with Go + Wails, no browser extension required.
 
@@ -170,7 +171,6 @@ This compatibility code is intentional so existing users do not lose reading pro
 
 Possible future improvements:
 
-- Dark mode.
 - More encodings.
 - Regex search.
 - Case-sensitive / case-insensitive search options.
