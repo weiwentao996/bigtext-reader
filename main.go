@@ -25,6 +25,17 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup:        app.startup,
+		OnDomReady:       app.domReady,
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: "bigtext-reader",
+			OnSecondInstanceLaunch: func(data options.SecondInstanceData) {
+				app.openFirstPath(data.Args)
+			},
+		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop:    true,
+			DisableWebViewDrop: true,
+		},
 		Bind: []interface{}{
 			app,
 		},

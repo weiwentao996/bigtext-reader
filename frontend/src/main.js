@@ -22,6 +22,7 @@ import {
   SetLanguage,
   StartSearch,
 } from "../wailsjs/go/main/App";
+import { EventsOn, OnFileDrop } from "../wailsjs/runtime/runtime";
 
 const LOAD_THRESHOLD_PX = 600;
 const PREFETCH_THRESHOLD_PX = 1400;
@@ -515,6 +516,8 @@ el.fontSize.value = String(state.fontSize);
 applyFontSize();
 applyLocale();
 run(() => SetLanguage(state.language));
+EventsOn("app:open-file", (path) => run(() => openFilePath(path)));
+OnFileDrop((_x, _y, paths) => run(() => openFilePath(paths?.[0])), false);
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && el.aboutOverlay.classList.contains("open")) {
@@ -569,10 +572,15 @@ async function selectAndOpenFile() {
   closeFileMenu();
   const path = await SelectFile();
   if (path) {
-    state.path = path;
-    el.filePath.value = path;
-    await openCurrentFile();
+    await openFilePath(path);
   }
+}
+
+async function openFilePath(path) {
+  if (!path) return;
+  state.path = path;
+  el.filePath.value = path;
+  await openCurrentFile();
 }
 
 async function selectAndOpenFolder() {

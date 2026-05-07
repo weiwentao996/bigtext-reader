@@ -62,6 +62,30 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
+func (a *App) domReady(ctx context.Context) {
+	a.openFirstPath(os.Args[1:])
+}
+
+func (a *App) openFirstPath(paths []string) {
+	if a.ctx == nil {
+		return
+	}
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		runtime.WindowShow(a.ctx)
+		runtime.WindowUnminimise(a.ctx)
+		runtime.EventsEmit(a.ctx, "app:open-file", cleanPath(path))
+		return
+	}
+}
+
 func (a *App) SetLanguage(lang string) error {
 	a.language = normalizeLanguage(lang)
 	return nil
