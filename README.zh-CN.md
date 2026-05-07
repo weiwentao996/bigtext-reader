@@ -2,7 +2,6 @@
 
 [English](README.md) | 简体中文
 
-GitHub 仓库：[github.com/weiwentao996/bigtext-reader](https://github.com/weiwentao996/bigtext-reader)
 
 最新版本：**v1.0.1**
 

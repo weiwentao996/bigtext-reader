@@ -2,8 +2,6 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Repository: [github.com/weiwentao996/bigtext-reader](https://github.com/weiwentao996/bigtext-reader)
-
 Latest version: **v1.0.1**
 
 ![BigText Reader](build/appicon.png)
