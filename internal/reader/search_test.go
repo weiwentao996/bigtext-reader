@@ -1,6 +1,8 @@
 package reader
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -295,6 +297,30 @@ func TestBuildSearchHitPreviewsWindow(t *testing.T) {
 	}
 }
 
+func TestBuildSearchHitPreviewsFromRefsPreservesIndexes(t *testing.T) {
+	path := writeTempFile(t, "hit one\nhit two\nhit three\n")
+	r, err := Open(path, Config{Encoding: EncodingUTF8, SearchChunk: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	refs, err := r.BuildSearchIndex("hit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hits, err := r.BuildSearchHitPreviewsFromRefs(refs[1:3])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 2 || hits[0].Index != 1 || hits[1].Index != 2 {
+		t.Fatalf("unexpected preserved indexes: %#v", hits)
+	}
+	if hits[0].LinePreview != "hit two" || hits[1].LinePreview != "hit three" {
+		t.Fatalf("unexpected previews: %#v", hits)
+	}
+}
+
 func TestSearchAllGBKChinesePreview(t *testing.T) {
 	encoded, _, err := transform.Bytes(simplifiedchinese.GBK.NewEncoder(), []byte("开始\n前缀关键字后缀\n"))
 	if err != nil {
@@ -320,5 +346,157 @@ func TestSearchAllGBKChinesePreview(t *testing.T) {
 	hit := summary.Hits[0]
 	if hit.ByteLength != 6 || hit.LinePreview != "前缀关键字后缀" || hit.LineCharStart != 2 || hit.LineCharEnd != 5 {
 		t.Fatalf("unexpected GBK hit: %#v", hit)
+	}
+}
+
+func TestBuildSearchIndexWithCaseOptions(t *testing.T) {
+	path := writeTempFile(t, "Error\nerror\nERROR\n")
+	r, err := Open(path, Config{Encoding: EncodingUTF8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	sensitive, err := r.BuildSearchIndexWithOptions("error", SearchOptions{CaseSensitive: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sensitive) != 1 || sensitive[0].LineNumber != 2 {
+		t.Fatalf("unexpected case-sensitive refs: %#v", sensitive)
+	}
+
+	folded, err := r.BuildSearchIndexWithOptions("error", SearchOptions{CaseSensitive: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(folded) != 3 {
+		t.Fatalf("unexpected case-insensitive refs: %#v", folded)
+	}
+}
+
+func TestBuildSearchIndexWithRegex(t *testing.T) {
+	path := writeTempFile(t, "error 100\nwarn 20\nERROR 300\n")
+	r, err := Open(path, Config{Encoding: EncodingUTF8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	refs, err := r.BuildSearchIndexWithOptions(`error\s+\d+`, SearchOptions{Regex: true, CaseSensitive: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 1 || refs[0].LineNumber != 1 || refs[0].ByteLength != len("error 100") {
+		t.Fatalf("unexpected regex refs: %#v", refs)
+	}
+
+	refs, err = r.BuildSearchIndexWithOptions(`error\s+\d+`, SearchOptions{Regex: true, CaseSensitive: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 2 || refs[1].LineNumber != 3 {
+		t.Fatalf("unexpected folded regex refs: %#v", refs)
+	}
+}
+
+func TestBuildSearchIndexWithRegexErrors(t *testing.T) {
+	path := writeTempFile(t, "abc\n")
+	r, err := Open(path, Config{Encoding: EncodingUTF8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	if _, err := r.BuildSearchIndexWithOptions("(", SearchOptions{Regex: true, CaseSensitive: true}); err == nil {
+		t.Fatal("expected invalid regex error")
+	}
+	_, err = r.BuildSearchIndexWithOptions(".*", SearchOptions{Regex: true, CaseSensitive: true})
+	if !errors.Is(err, ErrEmptyRegexMatch) {
+		t.Fatalf("expected ErrEmptyRegexMatch, got %v", err)
+	}
+}
+
+func TestBuildSearchIndexGB18030ByteOffsets(t *testing.T) {
+	encoded, _, err := transform.Bytes(simplifiedchinese.GB18030.NewEncoder(), []byte("开始\n前缀关键字后缀\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "sample-gb18030.txt")
+	if err := os.WriteFile(path, encoded, 0644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Open(path, Config{Encoding: EncodingGB18030})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	refs, err := r.BuildSearchIndexWithOptions("关键字", SearchOptions{CaseSensitive: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("unexpected refs: %#v", refs)
+	}
+	if refs[0].ByteLength != 6 || refs[0].LineNumber != 2 {
+		t.Fatalf("unexpected GB18030 ref: %#v", refs[0])
+	}
+}
+
+func TestStreamSearchWithOptionsReportsProgress(t *testing.T) {
+	content := "hit one\nmiss\nhit two\n"
+	path := writeTempFile(t, content)
+	r, err := Open(path, Config{Encoding: EncodingUTF8, SearchChunk: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	var refs []SearchHitRef
+	var progress []int64
+	err = r.StreamSearchWithOptions(context.Background(), "hit", SearchOptions{CaseSensitive: true}, func(ref SearchHitRef) error {
+		refs = append(refs, ref)
+		return nil
+	}, func(scannedOffset int64) error {
+		progress = append(progress, scannedOffset)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 2 || refs[0].LineNumber != 1 || refs[1].LineNumber != 3 {
+		t.Fatalf("unexpected refs: %#v", refs)
+	}
+	if len(progress) == 0 || progress[len(progress)-1] != int64(len(content)) {
+		t.Fatalf("unexpected progress: %#v", progress)
+	}
+	for i := 1; i < len(progress); i++ {
+		if progress[i] < progress[i-1] {
+			t.Fatalf("progress is not monotonic: %#v", progress)
+		}
+	}
+}
+
+func TestStreamSearchWithOptionsStopsOnCancel(t *testing.T) {
+	path := writeTempFile(t, "hit\nhit\nhit\n")
+	r, err := Open(path, Config{Encoding: EncodingUTF8, SearchChunk: 12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var refs []SearchHitRef
+	err = r.StreamSearchWithOptions(ctx, "hit", SearchOptions{CaseSensitive: true}, func(ref SearchHitRef) error {
+		refs = append(refs, ref)
+		cancel()
+		return nil
+	}, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("expected one ref before cancel, got %#v", refs)
 	}
 }

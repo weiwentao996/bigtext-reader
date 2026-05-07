@@ -3,6 +3,7 @@ import "./style.css";
 import {
   AddBookmark,
   DeleteBookmark,
+  ExportSearchResults,
   GoToBookmark,
   JumpToOffset,
   JumpToPercent,
@@ -13,16 +14,24 @@ import {
   ReadNextPage,
   ReadPreviousPage,
   SaveProgress,
-  SearchForward,
-  SearchHitPage,
   SearchHitPageByIndex,
   SearchHitPreviews,
+  SearchSessionStatus,
   SelectFile,
   SelectFolder,
+  StopSearch,
   SetLanguage,
   StartSearch,
 } from "../wailsjs/go/main/App";
-import { EventsOn, OnFileDrop } from "../wailsjs/runtime/runtime";
+import {
+  EventsOn,
+  OnFileDrop,
+  Quit,
+  WindowMinimise,
+  WindowSetDarkTheme,
+  WindowSetLightTheme,
+  WindowToggleMaximise,
+} from "../wailsjs/runtime/runtime";
 
 const LOAD_THRESHOLD_PX = 600;
 const PREFETCH_THRESHOLD_PX = 1400;
@@ -33,6 +42,7 @@ const LANG_STORAGE_KEY = "bigtext-reader.language";
 const FONT_SIZE_STORAGE_KEY = "bigtext-reader.fontSize";
 const THEME_STORAGE_KEY = "bigtext-reader.theme";
 const DEFAULT_PAGE_SIZE = 60;
+const MAX_VIRTUAL_SCROLL_HEIGHT = 30_000_000;
 
 const messages = {
   zh: {
@@ -40,6 +50,7 @@ const messages = {
     "menu.open": "打开文件...",
     "menu.openFolder": "打开文件夹...",
     "menu.reload": "重新加载",
+    "menu.settings": "设置",
     "menu.about": "关于",
     "file.noFile": "尚未打开文件",
     "file.pathPlaceholder": "选择一个 TXT / LOG / 文本文件",
@@ -55,8 +66,6 @@ const messages = {
     "bookmark.delete": "删除",
     "bookmark.deleteTitle": "删除书签",
     "toolbar.jump": "定位",
-    "toolbar.prev": "上段",
-    "toolbar.next": "下段",
     "toolbar.encoding": "编码",
     "toolbar.fontSize": "字号",
     "toolbar.theme": "主题",
@@ -66,8 +75,12 @@ const messages = {
     "search.find": "查找",
     "search.prev": "上一个",
     "search.next": "下一个",
+    "search.regex": "正则",
+    "search.caseSensitive": "Aa",
     "search.none": "未搜索",
     "search.title": "搜索结果",
+    "search.export": "导出",
+    "search.stop": "停止",
     "search.close": "× 关闭",
     "search.scanning": "正在扫描文件",
     "search.counting": "正在统计...",
@@ -78,6 +91,9 @@ const messages = {
     "search.current": "第 {current} / 共 {total} 个",
     "search.line": "行",
     "search.loading": "加载中...",
+    "search.progress": "搜索中 {percent}% · 已找到 {total} 个",
+    "search.foundScanning": "已找到 {total} 个 · 搜索中 {percent}%",
+    "search.stopped": "已停止 · 已找到 {total} 个",
     "empty.title": "打开一个大文本文件",
     "empty.desc": "支持 GB 级 TXT / LOG，滚动时自动加载上下文。",
     "status.ready": "就绪",
@@ -107,8 +123,13 @@ const messages = {
     "status.jumping": "正在跳转...",
     "status.jumpedOffset": "已定位到 offset {offset}",
     "status.found": "找到 {total} 个匹配项",
-    "status.searching": "正在统计搜索结果...",
+    "status.searching": "正在启动搜索...",
+    "status.searchStarted": "正在搜索 {percent}% · 已找到 {total} 个",
+    "status.searchComplete": "搜索完成，找到 {total} 个匹配项",
+    "status.searchStopped": "搜索已停止，已找到 {total} 个匹配项",
     "status.jumpedHit": "已跳转到第 {index} 个匹配项",
+    "status.exporting": "正在导出搜索结果...",
+    "status.exported": "已导出到 {path}",
     "status.bookmarkSaved": "书签已保存",
     "status.bookmarkJumped": "已跳转到书签",
     "status.bookmarkDeleted": "书签已删除",
@@ -122,6 +143,7 @@ const messages = {
     "menu.open": "Open...",
     "menu.openFolder": "Open Folder...",
     "menu.reload": "Reload",
+    "menu.settings": "Settings",
     "menu.about": "About",
     "file.noFile": "No file open",
     "file.pathPlaceholder": "Select a TXT / LOG / text file",
@@ -137,8 +159,6 @@ const messages = {
     "bookmark.delete": "Delete",
     "bookmark.deleteTitle": "Delete bookmark",
     "toolbar.jump": "Go",
-    "toolbar.prev": "Previous",
-    "toolbar.next": "Next",
     "toolbar.encoding": "Encoding",
     "toolbar.fontSize": "Font",
     "toolbar.theme": "Theme",
@@ -148,8 +168,12 @@ const messages = {
     "search.find": "Find",
     "search.prev": "Previous",
     "search.next": "Next",
+    "search.regex": "Regex",
+    "search.caseSensitive": "Aa",
     "search.none": "Not searched",
     "search.title": "Search results",
+    "search.export": "Export",
+    "search.stop": "Stop",
     "search.close": "× Close",
     "search.scanning": "Scanning file",
     "search.counting": "Counting...",
@@ -160,6 +184,9 @@ const messages = {
     "search.current": "{current} of {total}",
     "search.line": "line",
     "search.loading": "loading...",
+    "search.progress": "Searching {percent}% · {total} found",
+    "search.foundScanning": "{total} found · searching {percent}%",
+    "search.stopped": "Stopped · {total} found",
     "empty.title": "Open a large text file",
     "empty.desc":
       "Supports GB-scale TXT / LOG files and loads context while scrolling.",
@@ -190,8 +217,13 @@ const messages = {
     "status.jumping": "Jumping...",
     "status.jumpedOffset": "Jumped to offset {offset}",
     "status.found": "Found {total} matches",
-    "status.searching": "Counting search results...",
+    "status.searching": "Starting search...",
+    "status.searchStarted": "Searching {percent}% · {total} found",
+    "status.searchComplete": "Search complete, found {total} matches",
+    "status.searchStopped": "Search stopped, found {total} matches",
     "status.jumpedHit": "Jumped to match {index}",
+    "status.exporting": "Exporting search results...",
+    "status.exported": "Exported to {path}",
     "status.bookmarkSaved": "Bookmark saved",
     "status.bookmarkJumped": "Jumped to bookmark",
     "status.bookmarkDeleted": "Bookmark deleted",
@@ -265,6 +297,18 @@ const app = document.querySelector("#app");
 
 app.innerHTML = `
   <div class="app-shell typora-shell">
+    <div class="titlebar">
+      <div class="titlebar-brand">
+        <span class="titlebar-icon">W</span>
+        <span class="titlebar-title">BigText Reader</span>
+      </div>
+      <div class="titlebar-drag-region" aria-hidden="true"></div>
+      <div class="window-controls">
+        <button id="windowMinimise" class="window-control" type="button" aria-label="Minimize">−</button>
+        <button id="windowMaximise" class="window-control" type="button" aria-label="Maximize">□</button>
+        <button id="windowClose" class="window-control close" type="button" aria-label="Close">×</button>
+      </div>
+    </div>
     <header class="topbar">
       <nav class="menu-strip" aria-label="Application menu">
         <div class="menu-root">
@@ -276,6 +320,38 @@ app.innerHTML = `
             <button id="menuReload" class="menu-command" type="button"><span data-i18n="menu.reload">Reload</span></button>
           </div>
         </div>
+        <div class="menu-root">
+          <button id="settingsMenuButton" class="menu-item" type="button" data-i18n="menu.settings">设置</button>
+          <div id="settingsMenu" class="menu-dropdown settings-dropdown">
+            <label class="menu-field"><span data-i18n="toolbar.encoding">编码</span>
+              <select id="encoding">
+                <option value="auto">auto</option>
+                <option value="utf8">utf8</option>
+                <option value="gbk">gbk</option>
+                <option value="gb18030">gb18030</option>
+                <option value="big5">big5</option>
+                <option value="shift_jis">shift_jis</option>
+                <option value="euc_kr">euc_kr</option>
+                <option value="windows1252">windows1252</option>
+              </select>
+            </label>
+            <label class="menu-field"><span data-i18n="toolbar.fontSize">字号</span>
+              <input id="fontSize" type="number" min="12" max="32" step="0.5" value="16.5" />
+            </label>
+            <label class="menu-field"><span data-i18n="toolbar.theme">主题</span>
+              <select id="themeSelect">
+                <option value="light" data-i18n="theme.light">浅色</option>
+                <option value="dark" data-i18n="theme.dark">深色</option>
+              </select>
+            </label>
+            <label class="menu-field"><span>Language</span>
+              <select id="languageSelect" aria-label="Language">
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+          </div>
+        </div>
         <button id="aboutButton" class="menu-item" type="button" data-i18n="menu.about">关于</button>
       </nav>
 
@@ -284,12 +360,7 @@ app.innerHTML = `
         <input id="filePath" class="file-path" data-i18n-placeholder="file.pathPlaceholder" placeholder="选择一个 TXT / LOG / 文本文件" readonly />
       </div>
 
-      <label class="language-control">
-        <select id="languageSelect" aria-label="Language">
-          <option value="zh">中文</option>
-          <option value="en">English</option>
-        </select>
-      </label>
+      <div class="topbar-spacer" aria-hidden="true"></div>
     </header>
 
     <main class="workspace">
@@ -324,34 +395,14 @@ app.innerHTML = `
             <input id="jumpInput" class="compact-input" placeholder="50% / offset" />
             <button id="jumpButton" class="button subtle" data-i18n="toolbar.jump">定位</button>
           </div>
-
-          <div class="segmented-actions">
-            <button id="prevPage" class="button icon-button" data-i18n="toolbar.prev">上段</button>
-            <button id="nextPage" class="button icon-button" data-i18n="toolbar.next">下段</button>
-          </div>
-
-          <label class="mini-field"><span data-i18n="toolbar.encoding">编码</span>
-            <select id="encoding">
-              <option value="auto">auto</option>
-              <option value="utf8">utf8</option>
-              <option value="gbk">gbk</option>
-            </select>
-          </label>
-
-          <label class="mini-field"><span data-i18n="toolbar.fontSize">字号</span>
-            <input id="fontSize" type="number" min="12" max="32" step="0.5" value="16.5" />
-          </label>
-
-          <label class="mini-field"><span data-i18n="toolbar.theme">主题</span>
-            <select id="themeSelect">
-              <option value="light" data-i18n="theme.light">浅色</option>
-              <option value="dark" data-i18n="theme.dark">深色</option>
-            </select>
-          </label>
         </section>
 
         <section class="searchbar">
           <input id="searchInput" class="search-input" data-i18n-placeholder="search.placeholder" placeholder="搜索关键字，回车查找" />
+          <div class="search-options">
+            <label class="search-option"><input id="searchRegex" type="checkbox" /><span data-i18n="search.regex">正则</span></label>
+            <label class="search-option"><input id="searchCaseSensitive" type="checkbox" checked /><span data-i18n="search.caseSensitive">Aa</span></label>
+          </div>
           <button id="searchButton" class="button subtle" data-i18n="search.find">查找</button>
           <button id="prevSearch" class="button subtle" data-i18n="search.prev">上一个</button>
           <button id="nextSearch" class="button subtle" data-i18n="search.next">下一个</button>
@@ -361,7 +412,11 @@ app.innerHTML = `
         <section id="searchPanel" class="search-panel">
           <div class="search-panel-header">
             <span data-i18n="search.title">搜索结果</span>
-            <button id="closeSearchPanel" class="close-search-panel" type="button" data-i18n="search.close">× 关闭</button>
+            <div class="search-panel-actions">
+              <button id="exportSearchResults" class="close-search-panel" type="button" data-i18n="search.export">导出</button>
+              <button id="stopSearch" class="close-search-panel" type="button" data-i18n="search.stop">停止</button>
+              <button id="closeSearchPanel" class="close-search-panel" type="button" data-i18n="search.close">× 关闭</button>
+            </div>
           </div>
           <div id="searchResults" class="search-results"></div>
         </section>
@@ -440,25 +495,41 @@ const state = {
   searchSeq: 0,
   searching: false,
   searchSessionId: "",
+  searchSessionKey: "",
+  searchRegex: false,
+  searchCaseSensitive: true,
+  searchExporting: false,
   searchPreviewCache: new Map(),
   searchPreviewPending: new Set(),
   searchTotal: 0,
   searchCurrentIndex: -1,
   searchResultsKeyword: "",
   searchStatsLoading: false,
+  searchDone: false,
+  searchScannedOffset: 0,
+  searchFileSize: 0,
+  searchError: "",
+  searchCanceled: false,
+  searchAutoJumpPending: false,
+  searchPollTimer: null,
   searchPanelVisible: false,
   searchVirtual: {
     rowHeight: 42,
     pageSize: 100,
     overscan: 8,
-    maxCachedRows: 2200,
+    cachePagesAroundViewport: 2,
   },
   sidePanelTab: "files",
 };
 
 const el = {
+  windowMinimise: document.querySelector("#windowMinimise"),
+  windowMaximise: document.querySelector("#windowMaximise"),
+  windowClose: document.querySelector("#windowClose"),
   fileMenuButton: document.querySelector("#fileMenuButton"),
   fileMenu: document.querySelector("#fileMenu"),
+  settingsMenuButton: document.querySelector("#settingsMenuButton"),
+  settingsMenu: document.querySelector("#settingsMenu"),
   menuOpenFile: document.querySelector("#menuOpenFile"),
   menuOpenFolder: document.querySelector("#menuOpenFolder"),
   menuReload: document.querySelector("#menuReload"),
@@ -474,11 +545,11 @@ const el = {
   encoding: document.querySelector("#encoding"),
   fontSize: document.querySelector("#fontSize"),
   themeSelect: document.querySelector("#themeSelect"),
-  prevPage: document.querySelector("#prevPage"),
-  nextPage: document.querySelector("#nextPage"),
   jumpInput: document.querySelector("#jumpInput"),
   jumpButton: document.querySelector("#jumpButton"),
   searchInput: document.querySelector("#searchInput"),
+  searchRegex: document.querySelector("#searchRegex"),
+  searchCaseSensitive: document.querySelector("#searchCaseSensitive"),
   searchButton: document.querySelector("#searchButton"),
   bookmarkName: document.querySelector("#bookmarkName"),
   bookmarkButton: document.querySelector("#bookmarkButton"),
@@ -491,6 +562,8 @@ const el = {
   bookmarksPanel: document.querySelector("#bookmarksPanel"),
   searchPanel: document.querySelector("#searchPanel"),
   closeSearchPanel: document.querySelector("#closeSearchPanel"),
+  exportSearchResults: document.querySelector("#exportSearchResults"),
+  stopSearch: document.querySelector("#stopSearch"),
   prevSearch: document.querySelector("#prevSearch"),
   nextSearch: document.querySelector("#nextSearch"),
   searchSummary: document.querySelector("#searchSummary"),
@@ -504,10 +577,18 @@ const el = {
   stateChip: document.querySelector("#stateChip"),
 };
 
+el.windowMinimise.addEventListener("click", WindowMinimise);
+el.windowMaximise.addEventListener("click", WindowToggleMaximise);
+el.windowClose.addEventListener("click", Quit);
 el.fileMenuButton.addEventListener("click", (event) => {
   event.stopPropagation();
-  toggleFileMenu();
+  toggleMenu(el.fileMenu);
 });
+el.settingsMenuButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleMenu(el.settingsMenu);
+});
+el.settingsMenu.addEventListener("click", (event) => event.stopPropagation());
 el.menuOpenFile.addEventListener("click", () => run(selectAndOpenFile));
 el.menuOpenFolder.addEventListener("click", () => run(selectAndOpenFolder));
 el.menuReload.addEventListener("click", () => run(openCurrentFile));
@@ -524,10 +605,10 @@ el.encoding.addEventListener("change", () => run(changeEncoding));
 el.fontSize.addEventListener("change", changeFontSize);
 el.fontSize.addEventListener("input", changeFontSize);
 el.themeSelect.addEventListener("change", changeTheme);
-el.nextPage.addEventListener("click", () => run(loadNext));
-el.prevPage.addEventListener("click", () => run(loadPrevious));
 el.jumpButton.addEventListener("click", () => run(jump));
 el.searchButton.addEventListener("click", () => run(search));
+el.searchRegex.addEventListener("change", resetSearchSessionForOptionChange);
+el.searchCaseSensitive.addEventListener("change", resetSearchSessionForOptionChange);
 el.prevSearch.addEventListener("click", () =>
   run(() => goRelativeSearchHit(-1)),
 );
@@ -535,11 +616,14 @@ el.nextSearch.addEventListener("click", () =>
   run(() => goRelativeSearchHit(1)),
 );
 el.closeSearchPanel.addEventListener("click", () => hideSearchResults());
+el.exportSearchResults.addEventListener("click", () => run(exportSearchResults));
+el.stopSearch.addEventListener("click", () => run(stopSearch));
 el.bookmarkButton.addEventListener("click", () => run(addBookmark));
 el.filesTab.addEventListener("click", () => setSidePanelTab("files"));
 el.bookmarksTab.addEventListener("click", () => setSidePanelTab("bookmarks"));
 el.reader.addEventListener("scroll", onReaderScroll);
 el.searchResults.addEventListener("scroll", () => {
+  trimSearchPreviewCache();
   renderSearchResults();
 });
 el.searchInput.addEventListener("keydown", (event) => {
@@ -549,7 +633,7 @@ el.jumpInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") run(jump);
 });
 
-window.addEventListener("click", () => closeFileMenu());
+window.addEventListener("click", () => closeMenus());
 el.languageSelect.value = state.language;
 el.fontSize.value = String(state.fontSize);
 el.themeSelect.value = state.theme;
@@ -558,6 +642,7 @@ applyTheme();
 applyLocale();
 run(() => SetLanguage(state.language));
 EventsOn("app:open-file", (path) => run(() => openFilePath(path)));
+EventsOn("search:progress", (summary) => run(() => handleSearchProgress(summary)));
 OnFileDrop((_x, _y, paths) => run(() => openFilePath(paths?.[0])), false);
 
 window.addEventListener("keydown", (event) => {
@@ -610,7 +695,7 @@ function applyLocale() {
 }
 
 async function selectAndOpenFile() {
-  closeFileMenu();
+  closeMenus();
   const path = await SelectFile();
   if (path) {
     await openFilePath(path);
@@ -625,7 +710,7 @@ async function openFilePath(path) {
 }
 
 async function selectAndOpenFolder() {
-  closeFileMenu();
+  closeMenus();
   const folder = await SelectFolder();
   if (!folder) return;
   state.folderPath = folder;
@@ -633,16 +718,19 @@ async function selectAndOpenFolder() {
   renderFolderFiles();
 }
 
-function toggleFileMenu() {
-  el.fileMenu.classList.toggle("open");
+function toggleMenu(menu) {
+  const isOpen = menu.classList.contains("open");
+  closeMenus();
+  menu.classList.toggle("open", !isOpen);
 }
 
-function closeFileMenu() {
+function closeMenus() {
   el.fileMenu.classList.remove("open");
+  el.settingsMenu.classList.remove("open");
 }
 
 function showAboutDialog() {
-  closeFileMenu();
+  closeMenus();
   el.aboutOverlay.classList.add("open");
   el.aboutOverlay.setAttribute("aria-hidden", "false");
   el.aboutCloseButton.focus();
@@ -670,6 +758,11 @@ function changeTheme() {
 
 function applyTheme() {
   document.documentElement.dataset.theme = state.theme;
+  if (state.theme === "dark") {
+    WindowSetDarkTheme();
+  } else {
+    WindowSetLightTheme();
+  }
 }
 
 function applyFontSize() {
@@ -693,7 +786,7 @@ async function changeEncoding() {
 }
 
 async function openCurrentFile(options = {}) {
-  closeFileMenu();
+  closeMenus();
   const path = state.path || el.filePath.value;
   if (!path) throw new Error(t("error.selectFile"));
   setBusy(options.busyText || t("status.opening"));
@@ -892,16 +985,19 @@ async function search() {
   if (!state.meta || state.searching) return;
   const keyword = el.searchInput.value.trim();
   if (!keyword) return;
+  const options = currentSearchOptions();
+  const sessionKey = searchSessionKey(keyword, options);
 
   const seq = ++state.searchSeq;
   state.searching = true;
   el.searchButton.disabled = true;
   try {
-    if (keyword !== state.searchResultsKeyword || !state.searchSessionId) {
-      await loadSearchResults(keyword, seq);
-      if (seq !== state.searchSeq || !state.searchTotal) return;
-      await goToSearchHitIndex(0);
-      setStatus(t("status.found", { total: state.searchTotal }));
+    if (
+      sessionKey !== state.searchSessionKey ||
+      !state.searchSessionId ||
+      state.searchCanceled
+    ) {
+      await loadSearchResults(keyword, options, sessionKey, seq);
       return;
     }
 
@@ -910,7 +1006,11 @@ async function search() {
       return;
     }
 
-    setStatus(t("search.noMatch"), true);
+    if (state.searchDone) {
+      setStatus(t("search.noMatch"), true);
+    } else {
+      updateSearchStatus();
+    }
   } finally {
     if (seq === state.searchSeq) {
       state.searching = false;
@@ -919,32 +1019,121 @@ async function search() {
   }
 }
 
-async function loadSearchResults(keyword, seq) {
+async function loadSearchResults(keyword, options, sessionKey, seq) {
   state.searchStatsLoading = true;
   state.searchSessionId = "";
+  state.searchSessionKey = sessionKey;
   state.searchResultsKeyword = keyword;
+  state.searchRegex = options.regex;
+  state.searchCaseSensitive = options.caseSensitive;
   state.searchPreviewCache.clear();
   state.searchPreviewPending.clear();
   state.searchTotal = 0;
   state.searchCurrentIndex = -1;
+  state.searchDone = false;
+  state.searchScannedOffset = 0;
+  state.searchFileSize = state.meta?.size || 0;
+  state.searchError = "";
+  state.searchCanceled = false;
+  state.searchAutoJumpPending = true;
   state.searchPanelVisible = true;
   state.searchMatch = null;
   el.searchResults.scrollTop = 0;
   renderSearchResults();
   setBusy(t("status.searching"));
 
-  const summary = await StartSearch(keyword);
+  const summary = await StartSearch(keyword, options.regex, options.caseSensitive);
   if (seq !== state.searchSeq) return;
-  state.searchSessionId = summary.searchId;
-  state.searchResultsKeyword = summary.keyword || keyword;
-  state.searchTotal = summary.total || 0;
+  applySearchSummary(summary);
   state.searchStatsLoading = false;
   renderSearchResults();
-  if (state.searchTotal) {
+  ensureSearchVisibleRange();
+  updateSearchStatus();
+  startSearchStatusPolling(seq);
+  await maybeAutoJumpToFirstSearchHit(seq);
+}
+
+async function handleSearchProgress(summary) {
+  if (!summary || summary.searchId !== state.searchSessionId) return;
+  const previousTotal = state.searchTotal;
+  applySearchSummary(summary);
+  renderSearchResults();
+  if (state.searchTotal > previousTotal) {
     ensureSearchVisibleRange();
-  } else {
-    setStatus(t("search.noMatch"), true);
+    await maybeAutoJumpToFirstSearchHit(state.searchSeq);
   }
+  updateSearchStatus();
+}
+
+function applySearchSummary(summary) {
+  state.searchSessionId = summary.searchId || state.searchSessionId;
+  state.searchResultsKeyword = summary.keyword || state.searchResultsKeyword;
+  state.searchRegex = Boolean(summary.regex);
+  state.searchCaseSensitive = Boolean(summary.caseSensitive);
+  state.searchTotal = summary.total || 0;
+  state.searchScannedOffset = Number(summary.scannedOffset || 0);
+  state.searchFileSize = Number(summary.fileSize || state.searchFileSize || 0);
+  state.searchDone = Boolean(summary.done);
+  state.searchCanceled = Boolean(summary.canceled);
+  state.searchError = summary.error || "";
+}
+
+async function maybeAutoJumpToFirstSearchHit(seq) {
+  if (!state.searchAutoJumpPending || !state.searchTotal || seq !== state.searchSeq)
+    return;
+  state.searchAutoJumpPending = false;
+  await goToSearchHitIndex(0);
+}
+
+function startSearchStatusPolling(seq) {
+  stopSearchStatusPolling();
+  if (!state.searchSessionId || state.searchDone) return;
+  state.searchPollTimer = setInterval(() => {
+    if (seq !== state.searchSeq || !state.searchSessionId || state.searchDone) {
+      stopSearchStatusPolling();
+      return;
+    }
+    SearchSessionStatus(state.searchSessionId)
+      .then((summary) => handleSearchProgress(summary))
+      .catch(() => stopSearchStatusPolling());
+  }, 500);
+}
+
+function stopSearchStatusPolling() {
+  if (!state.searchPollTimer) return;
+  clearInterval(state.searchPollTimer);
+  state.searchPollTimer = null;
+}
+
+function updateSearchStatus() {
+  if (!state.searchResultsKeyword) return;
+  if (state.searchError) {
+    setStatus(state.searchError, true);
+    return;
+  }
+  if (state.searchDone) {
+    stopSearchStatusPolling();
+    if (state.searchCanceled) {
+      setStatus(t("status.searchStopped", { total: state.searchTotal }));
+    } else if (state.searchTotal) {
+      setStatus(t("status.searchComplete", { total: state.searchTotal }));
+    } else {
+      setStatus(t("search.noMatch"), true);
+    }
+    return;
+  }
+  setBusy(
+    t("status.searchStarted", {
+      percent: searchProgressPercent(),
+      total: state.searchTotal,
+    }),
+  );
+}
+
+function searchProgressPercent() {
+  if (!state.searchFileSize) return "0.0";
+  const percent = (state.searchScannedOffset / state.searchFileSize) * 100;
+  return Math.min(100, Math.max(0, percent)).toFixed(1);
 }
 
 async function goRelativeSearchHit(step) {
@@ -964,16 +1153,77 @@ function hideSearchResults() {
   renderSearchResults();
 }
 
+function currentSearchOptions() {
+  return {
+    regex: el.searchRegex.checked,
+    caseSensitive: el.searchCaseSensitive.checked,
+  };
+}
+
+function searchSessionKey(keyword, options) {
+  return JSON.stringify([keyword, options.regex, options.caseSensitive]);
+}
+
+function resetSearchSessionForOptionChange() {
+  state.searchSeq++;
+  stopSearchStatusPolling();
+  state.searchSessionId = "";
+  state.searchSessionKey = "";
+  state.searchPreviewCache.clear();
+  state.searchPreviewPending.clear();
+  state.searchTotal = 0;
+  state.searchCurrentIndex = -1;
+  state.searchResultsKeyword = "";
+  state.searchDone = false;
+  state.searchScannedOffset = 0;
+  state.searchFileSize = 0;
+  state.searchError = "";
+  state.searchCanceled = false;
+  state.searchAutoJumpPending = false;
+  state.searchMatch = null;
+  renderSearchResults();
+}
+
+async function stopSearch() {
+  if (!state.searchSessionId || state.searchDone) return;
+  const summary = await StopSearch(state.searchSessionId);
+  applySearchSummary(summary);
+  renderSearchResults();
+  updateSearchStatus();
+}
+
+async function exportSearchResults() {
+  if (!state.searchSessionId || state.searchExporting) return;
+  state.searchExporting = true;
+  el.exportSearchResults.disabled = true;
+  setBusy(t("status.exporting"));
+  try {
+    const path = await ExportSearchResults(state.searchSessionId);
+    if (path) setStatus(t("status.exported", { path }));
+  } finally {
+    state.searchExporting = false;
+    el.exportSearchResults.disabled = false;
+  }
+}
+
 function resetSearchStateForFileChange() {
   state.searchSeq++;
+  stopSearchStatusPolling();
   state.searching = false;
   state.searchSessionId = "";
+  state.searchSessionKey = "";
   state.searchPreviewCache.clear();
   state.searchPreviewPending.clear();
   state.searchTotal = 0;
   state.searchCurrentIndex = -1;
   state.searchResultsKeyword = "";
   state.searchStatsLoading = false;
+  state.searchDone = false;
+  state.searchScannedOffset = 0;
+  state.searchFileSize = 0;
+  state.searchError = "";
+  state.searchCanceled = false;
+  state.searchAutoJumpPending = false;
   state.searchPanelVisible = false;
   state.searchMatch = null;
   state.lastSearchKeyword = "";
@@ -1107,6 +1357,7 @@ function setSidePanelTab(tab) {
 
 function renderSearchResults() {
   el.searchPanel.classList.toggle("open", state.searchPanelVisible);
+  el.stopSearch.disabled = !state.searchSessionId || state.searchDone;
   if (state.searchStatsLoading) {
     el.searchSummary.textContent = t("search.counting");
     el.searchResults.innerHTML = `<div class="empty-search-results">${escapeHtml(t("search.scanning"))}</div>`;
@@ -1117,19 +1368,48 @@ function renderSearchResults() {
     el.searchResults.innerHTML = `<div class="empty-search-results">${escapeHtml(t("search.prompt"))}</div>`;
     return;
   }
+  if (state.searchError) {
+    el.searchSummary.textContent = state.searchError;
+    el.searchResults.innerHTML = `<div class="empty-search-results">${escapeHtml(state.searchError)}</div>`;
+    return;
+  }
   if (!state.searchTotal) {
+    if (state.searchCanceled) {
+      el.searchSummary.textContent = t("search.stopped", { total: 0 });
+      el.searchResults.innerHTML = `<div class="empty-search-results">${escapeHtml(t("search.stopped", { total: 0 }))}</div>`;
+      return;
+    }
+    if (!state.searchDone) {
+      el.searchSummary.textContent = t("search.progress", {
+        percent: searchProgressPercent(),
+        total: 0,
+      });
+      el.searchResults.innerHTML = `<div class="empty-search-results">${escapeHtml(t("search.progress", { percent: searchProgressPercent(), total: 0 }))}</div>`;
+      return;
+    }
     el.searchSummary.textContent = t("search.noMatch");
     el.searchResults.innerHTML = `<div class="empty-search-results">${escapeHtml(t("search.noResult"))}</div>`;
     return;
   }
 
-  el.searchSummary.textContent =
-    state.searchCurrentIndex >= 0
-      ? t("search.current", {
-          current: state.searchCurrentIndex + 1,
-          total: state.searchTotal,
-        })
-      : t("search.total", { total: state.searchTotal });
+  if (state.searchCanceled) {
+    el.searchSummary.textContent = t("search.stopped", {
+      total: state.searchTotal,
+    });
+  } else if (!state.searchDone) {
+    el.searchSummary.textContent = t("search.foundScanning", {
+      percent: searchProgressPercent(),
+      total: state.searchTotal,
+    });
+  } else {
+    el.searchSummary.textContent =
+      state.searchCurrentIndex >= 0
+        ? t("search.current", {
+            current: state.searchCurrentIndex + 1,
+            total: state.searchTotal,
+          })
+        : t("search.total", { total: state.searchTotal });
+  }
   renderSearchVirtualRows();
   ensureSearchVisibleRange();
 }
@@ -1137,7 +1417,8 @@ function renderSearchResults() {
 function renderSearchVirtualRows() {
   const { first, last } = getSearchVisibleRange();
   const rowHeight = state.searchVirtual.rowHeight;
-  const totalHeight = state.searchTotal * rowHeight;
+  const totalHeight = getSearchVirtualHeight();
+  const translateY = searchIndexToScrollTop(first);
   const rows = [];
   for (let index = first; index <= last; index++) {
     const hit = state.searchPreviewCache.get(index);
@@ -1159,7 +1440,7 @@ function renderSearchVirtualRows() {
   }
   el.searchResults.innerHTML = `
     <div class="search-virtual-spacer" style="height:${totalHeight}px">
-      <div class="search-virtual-window" style="transform:translateY(${first * rowHeight}px)">
+      <div class="search-virtual-window" style="transform:translateY(${translateY}px)">
         ${rows.join("")}
       </div>
     </div>
@@ -1180,13 +1461,35 @@ function getSearchVisibleRange() {
   const rowHeight = state.searchVirtual.rowHeight;
   const overscan = state.searchVirtual.overscan;
   const viewport = el.searchResults.clientHeight || rowHeight * 6;
-  const first = Math.max(
-    0,
-    Math.floor(el.searchResults.scrollTop / rowHeight) - overscan,
-  );
+  const first = Math.max(0, scrollTopToSearchIndex(el.searchResults.scrollTop) - overscan);
   const count = Math.ceil(viewport / rowHeight) + overscan * 2;
   const last = Math.min(state.searchTotal - 1, first + count - 1);
   return { first, last };
+}
+
+function getSearchVirtualHeight() {
+  return Math.min(state.searchTotal * state.searchVirtual.rowHeight, MAX_VIRTUAL_SCROLL_HEIGHT);
+}
+
+function searchIndexToScrollTop(index) {
+  if (!state.searchTotal) return 0;
+  const naturalHeight = state.searchTotal * state.searchVirtual.rowHeight;
+  const virtualHeight = getSearchVirtualHeight();
+  if (naturalHeight <= virtualHeight) return index * state.searchVirtual.rowHeight;
+  const maxIndex = Math.max(1, state.searchTotal - 1);
+  const maxScrollTop = Math.max(0, virtualHeight - (el.searchResults.clientHeight || state.searchVirtual.rowHeight));
+  return Math.round((index / maxIndex) * maxScrollTop);
+}
+
+function scrollTopToSearchIndex(scrollTop) {
+  const naturalHeight = state.searchTotal * state.searchVirtual.rowHeight;
+  const virtualHeight = getSearchVirtualHeight();
+  if (naturalHeight <= virtualHeight) {
+    return Math.floor(scrollTop / state.searchVirtual.rowHeight);
+  }
+  const maxScrollTop = Math.max(1, virtualHeight - (el.searchResults.clientHeight || state.searchVirtual.rowHeight));
+  const maxIndex = Math.max(0, state.searchTotal - 1);
+  return Math.min(maxIndex, Math.floor((scrollTop / maxScrollTop) * maxIndex));
 }
 
 function ensureSearchVisibleRange() {
@@ -1218,6 +1521,7 @@ function ensureSearchPreviewRange(first, last) {
           result.searchId !== state.searchSessionId
         )
           return;
+        applySearchSummary(result);
         (result.hits || []).forEach((hit) =>
           state.searchPreviewCache.set(hit.index, hit),
         );
@@ -1239,9 +1543,8 @@ function isSearchPreviewPageCached(offset, limit) {
 
 function scrollSearchListToIndex(index) {
   if (!state.searchPanelVisible) return;
-  const rowHeight = state.searchVirtual.rowHeight;
-  const top = index * rowHeight;
-  const bottom = top + rowHeight;
+  const top = searchIndexToScrollTop(index);
+  const bottom = searchIndexToScrollTop(Math.min(state.searchTotal - 1, index + 1));
   const visibleTop = el.searchResults.scrollTop;
   const visibleBottom = visibleTop + el.searchResults.clientHeight;
   if (top < visibleTop) {
@@ -1255,14 +1558,14 @@ function scrollSearchListToIndex(index) {
 }
 
 function trimSearchPreviewCache() {
-  if (state.searchPreviewCache.size <= state.searchVirtual.maxCachedRows)
-    return;
   const { first, last } = getSearchVisibleRange();
-  const keepStart = Math.max(0, first - state.searchVirtual.pageSize * 4);
-  const keepEnd = Math.min(
-    state.searchTotal - 1,
-    last + state.searchVirtual.pageSize * 4,
-  );
+  if (last < first) {
+    state.searchPreviewCache.clear();
+    return;
+  }
+  const keepPadding = state.searchVirtual.pageSize * state.searchVirtual.cachePagesAroundViewport;
+  const keepStart = Math.max(0, first - keepPadding);
+  const keepEnd = Math.min(state.searchTotal - 1, last + keepPadding);
   for (const index of state.searchPreviewCache.keys()) {
     if (
       index !== state.searchCurrentIndex &&

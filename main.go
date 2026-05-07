@@ -24,6 +24,7 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		Frameless:        true,
 		OnStartup:        app.startup,
 		OnDomReady:       app.domReady,
 		SingleInstanceLock: &options.SingleInstanceLock{
@@ -33,7 +34,7 @@ func main() {
 			},
 		},
 		DragAndDrop: &options.DragAndDrop{
-			EnableFileDrop:    true,
+			EnableFileDrop:     true,
 			DisableWebViewDrop: true,
 		},
 		Bind: []interface{}{

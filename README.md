@@ -17,11 +17,14 @@ large text file reader, big text reader, huge txt reader, log file reader, GB te
 - **Open huge files smoothly**: read GB-scale TXT / LOG files without loading the whole file into memory.
 - **Paging by byte offset**: fast navigation for very large files.
 - **Seamless scrolling**: automatically loads previous and next content while reading.
-- **UTF-8 and GBK support**: supports UTF-8, GBK, and automatic encoding detection.
-- **Full-file search**: search through the whole file and build a lightweight result index.
+- **Multiple text encodings**: supports UTF-8, GBK, GB18030, Big5, Shift_JIS, EUC-KR, Windows-1252, and automatic encoding detection.
+- **Streaming full-file search**: search starts immediately, shows scan progress, loads discovered results dynamically, and stores large result indexes in temporary files to avoid excessive memory usage.
+- **Regex and case options**: literal search, regex search, and case-sensitive / case-insensitive matching share the same progress and result-list experience.
+- **Stop search**: stop an in-progress search at any time while keeping discovered results available for browsing, jumping, and export.
 - **Virtualized search results**: smoothly browse large search result lists without manual pagination.
 - **Accurate result jumping**: click a search result and jump to the exact line and match position.
 - **Highlight matches**: search hits are highlighted in the reader and preview list.
+- **Export search results**: export search results to a UTF-8 TSV file for Excel, WPS, or text editors.
 - **Bookmarks**: save, list, jump to, and delete bookmarks.
 - **Reading progress**: automatically remembers the last reading offset for each file.
 - **Folder file list**: open a folder and quickly switch between files.
@@ -40,7 +43,7 @@ BigText Reader is useful when you need to:
 - Open very large `.txt` novels or exported text archives.
 - Inspect huge `.log` files without freezing an editor.
 - Search across GB-scale plain-text files.
-- Read Chinese text files encoded in GBK.
+- Read Chinese, Japanese, Korean, and legacy Western text files in common encodings.
 - Keep reading progress and bookmarks for long files.
 - Browse a folder of logs or text files quickly.
 - Drag a file into the app without losing the current window layout.
@@ -55,7 +58,7 @@ Open and scroll through a GB-scale log file with progress, encoding, and font co
 
 ### Full-File Search
 
-Search through the whole file, browse virtualized results, and jump to highlighted matches.
+Search through the whole file with live scan progress. Results load as they are discovered, and an in-progress search can be stopped while keeping discovered results available for browsing or TSV export.
 
 ![Full-file search results](docs/screenshots/main-search-results.png)
 
@@ -64,6 +67,10 @@ Search through the whole file, browse virtualized results, and jump to highlight
 Save reading positions as bookmarks and combine them with search result navigation.
 
 ![Bookmarks and search](docs/screenshots/bookmarks-search.png)
+
+## Search Result Export
+
+Search results can be exported as a UTF-8 TSV file. TSV is a tab-separated text table that can be opened with Excel, WPS Spreadsheets, VS Code, Notepad++, or other text editors. If a search is still running or has been stopped, the exported file is marked as `InProgress` or `Canceled`, meaning it only contains results discovered so far.
 
 ## Supported Platforms
 
@@ -171,10 +178,6 @@ This compatibility code is intentional so existing users do not lose reading pro
 
 Possible future improvements:
 
-- More encodings.
-- Regex search.
-- Case-sensitive / case-insensitive search options.
-- Export search results.
 - AI Agent log analysis: connect to AI APIs so the app can summarize logs, identify suspicious sections, and suggest troubleshooting steps.
 - Skill extension system: allow users to create reusable analysis skills for specific log formats or business scenarios.
 - Installer package for Windows.
@@ -194,7 +197,7 @@ If you find a large text file that BigText Reader cannot open smoothly, please o
 
 ## License
 
-No license has been added yet. If you plan to publish this repository for public use, consider adding an open-source license such as MIT, Apache-2.0, or GPL-3.0.
+This project is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE) for details.
 
 ## Author
 

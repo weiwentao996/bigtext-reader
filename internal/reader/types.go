@@ -3,9 +3,14 @@ package reader
 import "time"
 
 const (
-	EncodingAuto = "auto"
-	EncodingUTF8 = "utf8"
-	EncodingGBK  = "gbk"
+	EncodingAuto        = "auto"
+	EncodingUTF8        = "utf8"
+	EncodingGBK         = "gbk"
+	EncodingGB18030     = "gb18030"
+	EncodingBig5        = "big5"
+	EncodingShiftJIS    = "shift_jis"
+	EncodingEUCKR       = "euc_kr"
+	EncodingWindows1252 = "windows1252"
 )
 
 type Config struct {
@@ -39,6 +44,11 @@ type Page struct {
 	FileSize         int64    `json:"fileSize"`
 }
 
+type SearchOptions struct {
+	Regex         bool `json:"regex"`
+	CaseSensitive bool `json:"caseSensitive"`
+}
+
 type SearchHitLocation struct {
 	LineIndex     int `json:"lineIndex"`
 	LineCharStart int `json:"lineCharStart"`
@@ -67,30 +77,45 @@ type SearchHit struct {
 }
 
 type SearchSessionSummary struct {
-	SearchID string `json:"searchId"`
-	Keyword  string `json:"keyword"`
-	Total    int    `json:"total"`
-	FileSize int64  `json:"fileSize"`
-	Encoding string `json:"encoding"`
+	SearchID      string `json:"searchId"`
+	Keyword       string `json:"keyword"`
+	Total         int    `json:"total"`
+	ScannedOffset int64  `json:"scannedOffset"`
+	FileSize      int64  `json:"fileSize"`
+	Encoding      string `json:"encoding"`
+	Done          bool   `json:"done"`
+	Canceled      bool   `json:"canceled"`
+	Error         string `json:"error"`
+	Regex         bool   `json:"regex"`
+	CaseSensitive bool   `json:"caseSensitive"`
 }
 
 type SearchHitPreviewPage struct {
-	SearchID string      `json:"searchId"`
-	Keyword  string      `json:"keyword"`
-	Offset   int         `json:"offset"`
-	Limit    int         `json:"limit"`
-	Total    int         `json:"total"`
-	Hits     []SearchHit `json:"hits"`
+	SearchID      string      `json:"searchId"`
+	Keyword       string      `json:"keyword"`
+	Offset        int         `json:"offset"`
+	Limit         int         `json:"limit"`
+	Total         int         `json:"total"`
+	ScannedOffset int64       `json:"scannedOffset"`
+	FileSize      int64       `json:"fileSize"`
+	Done          bool        `json:"done"`
+	Canceled      bool        `json:"canceled"`
+	Error         string      `json:"error"`
+	Regex         bool        `json:"regex"`
+	CaseSensitive bool        `json:"caseSensitive"`
+	Hits          []SearchHit `json:"hits"`
 }
 
 type SearchSummary struct {
-	Keyword   string      `json:"keyword"`
-	Total     int         `json:"total"`
-	Hits      []SearchHit `json:"hits"`
-	Truncated bool        `json:"truncated"`
-	Limit     int         `json:"limit"`
-	FileSize  int64       `json:"fileSize"`
-	Encoding  string      `json:"encoding"`
+	Keyword       string      `json:"keyword"`
+	Total         int         `json:"total"`
+	Hits          []SearchHit `json:"hits"`
+	Truncated     bool        `json:"truncated"`
+	Limit         int         `json:"limit"`
+	FileSize      int64       `json:"fileSize"`
+	Encoding      string      `json:"encoding"`
+	Regex         bool        `json:"regex"`
+	CaseSensitive bool        `json:"caseSensitive"`
 }
 
 type PageWindow struct {

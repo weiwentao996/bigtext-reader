@@ -8,6 +8,8 @@ export function AddBookmark(arg1:string,arg2:number):Promise<void>;
 
 export function DeleteBookmark(arg1:number):Promise<void>;
 
+export function ExportSearchResults(arg1:string):Promise<string>;
+
 export function GoToBookmark(arg1:number):Promise<reader.Page>;
 
 export function JumpToOffset(arg1:number):Promise<reader.Page>;
@@ -40,6 +42,8 @@ export function SearchHitPageByIndex(arg1:string,arg2:number):Promise<main.Searc
 
 export function SearchHitPreviews(arg1:string,arg2:number,arg3:number):Promise<reader.SearchHitPreviewPage>;
 
+export function SearchSessionStatus(arg1:string):Promise<reader.SearchSessionSummary>;
+
 export function SearchStats(arg1:string,arg2:number):Promise<reader.SearchSummary>;
 
 export function SelectFile():Promise<string>;
@@ -48,4 +52,6 @@ export function SelectFolder():Promise<string>;
 
 export function SetLanguage(arg1:string):Promise<void>;
 
-export function StartSearch(arg1:string):Promise<reader.SearchSessionSummary>;
+export function StartSearch(arg1:string,arg2:boolean,arg3:boolean):Promise<reader.SearchSessionSummary>;
+
+export function StopSearch(arg1:string):Promise<reader.SearchSessionSummary>;

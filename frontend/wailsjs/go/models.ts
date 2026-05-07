@@ -246,6 +246,13 @@ export namespace reader {
 	    offset: number;
 	    limit: number;
 	    total: number;
+	    scannedOffset: number;
+	    fileSize: number;
+	    done: boolean;
+	    canceled: boolean;
+	    error: string;
+	    regex: boolean;
+	    caseSensitive: boolean;
 	    hits: SearchHit[];
 	
 	    static createFrom(source: any = {}) {
@@ -259,6 +266,13 @@ export namespace reader {
 	        this.offset = source["offset"];
 	        this.limit = source["limit"];
 	        this.total = source["total"];
+	        this.scannedOffset = source["scannedOffset"];
+	        this.fileSize = source["fileSize"];
+	        this.done = source["done"];
+	        this.canceled = source["canceled"];
+	        this.error = source["error"];
+	        this.regex = source["regex"];
+	        this.caseSensitive = source["caseSensitive"];
 	        this.hits = this.convertValues(source["hits"], SearchHit);
 	    }
 	
@@ -284,8 +298,14 @@ export namespace reader {
 	    searchId: string;
 	    keyword: string;
 	    total: number;
+	    scannedOffset: number;
 	    fileSize: number;
 	    encoding: string;
+	    done: boolean;
+	    canceled: boolean;
+	    error: string;
+	    regex: boolean;
+	    caseSensitive: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SearchSessionSummary(source);
@@ -296,8 +316,14 @@ export namespace reader {
 	        this.searchId = source["searchId"];
 	        this.keyword = source["keyword"];
 	        this.total = source["total"];
+	        this.scannedOffset = source["scannedOffset"];
 	        this.fileSize = source["fileSize"];
 	        this.encoding = source["encoding"];
+	        this.done = source["done"];
+	        this.canceled = source["canceled"];
+	        this.error = source["error"];
+	        this.regex = source["regex"];
+	        this.caseSensitive = source["caseSensitive"];
 	    }
 	}
 	export class SearchSummary {
@@ -308,6 +334,8 @@ export namespace reader {
 	    limit: number;
 	    fileSize: number;
 	    encoding: string;
+	    regex: boolean;
+	    caseSensitive: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SearchSummary(source);
@@ -322,6 +350,8 @@ export namespace reader {
 	        this.limit = source["limit"];
 	        this.fileSize = source["fileSize"];
 	        this.encoding = source["encoding"];
+	        this.regex = source["regex"];
+	        this.caseSensitive = source["caseSensitive"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

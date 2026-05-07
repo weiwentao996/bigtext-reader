@@ -94,6 +94,7 @@ select {
 
 input,
 select {
+  --wails-draggable: no-drag;
   height: 30px;
   border-radius: var(--radius-md);
   background: var(--control-bg);
@@ -110,6 +111,7 @@ select:focus {
 }
 
 button {
+  --wails-draggable: no-drag;
   height: 30px;
   border-radius: var(--radius-md);
   padding: 0 10px;
@@ -131,12 +133,79 @@ button:disabled {
 
 .app-shell {
   display: grid;
-  grid-template-rows: 38px minmax(0, 1fr) 30px;
+  grid-template-rows: 30px 38px minmax(0, 1fr) 30px;
   height: 100%;
   min-width: 820px;
   padding: 0;
   gap: 0;
   background: var(--bg);
+}
+
+.titlebar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  height: 30px;
+  border-bottom: 1px solid var(--border);
+  background: var(--control-bg);
+  color: var(--text-strong);
+  --wails-draggable: drag;
+}
+
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  --wails-draggable: drag;
+}
+
+.titlebar-icon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--text-strong);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.titlebar-drag-region {
+  align-self: stretch;
+  min-width: 0;
+  --wails-draggable: drag;
+}
+
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  --wails-draggable: no-drag;
+}
+
+.window-control {
+  width: 50px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.window-control:hover {
+  background: var(--control-hover);
+}
+
+.window-control.close:hover {
+  background: #c42b1c;
+  color: #ffffff;
 }
 
 .topbar {
@@ -160,6 +229,7 @@ button:disabled {
 .menu-strip {
   gap: 12px;
   white-space: nowrap;
+  --wails-draggable: no-drag;
 }
 
 .menu-root {
@@ -228,6 +298,32 @@ button:disabled {
   background: var(--border);
 }
 
+.settings-dropdown {
+  width: 220px;
+  padding: 10px;
+}
+
+.menu-field {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+
+.menu-field + .menu-field {
+  margin-top: 8px;
+}
+
+.menu-field select,
+.menu-field input {
+  width: 100%;
+  height: 28px;
+  font-size: 12px;
+}
+
 .segmented-actions,
 .command-group,
 .meta-chips {
@@ -238,6 +334,10 @@ button:disabled {
 .file-info {
   min-width: 0;
   text-align: center;
+}
+
+.topbar-spacer {
+  width: 160px;
 }
 
 .language-control {
@@ -506,7 +606,7 @@ button:disabled {
 
 .searchbar {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) auto auto auto auto;
+  grid-template-columns: minmax(140px, 1fr) auto auto auto auto auto;
   align-items: center;
   gap: 8px;
   min-height: 44px;
@@ -518,6 +618,32 @@ button:disabled {
 .search-input {
   width: 100%;
   height: 32px;
+}
+
+.search-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.search-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--muted-strong);
+  background: var(--control-bg);
+  font-size: 12px;
+}
+
+.search-option input {
+  width: 13px;
+  height: 13px;
+  padding: 0;
 }
 
 .search-summary {
@@ -548,6 +674,12 @@ button:disabled {
   color: var(--text-strong);
   font-size: 12px;
   font-weight: 650;
+}
+
+.search-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .close-search-panel {
@@ -1030,18 +1162,36 @@ button:disabled {
     min-width: 760px;
   }
 
+  .window-control {
+    width: 46px;
+  }
+
   .workspace {
     grid-template-columns: 230px minmax(0, 1fr);
   }
 
   .topbar {
-    grid-template-columns: auto minmax(160px, 1fr);
+    grid-template-columns: auto minmax(160px, 1fr) auto;
     gap: 8px;
   }
 
-  .commandbar {
+  .topbar-spacer {
+    width: 80px;
+  }
+
+  .commandbar,
+  .searchbar {
     flex-wrap: wrap;
     min-height: 38px;
+  }
+
+  .searchbar {
+    display: flex;
+  }
+
+  .search-input {
+    flex: 1;
+    min-width: 180px;
   }
 
   .page-container {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"bigtext-reader/internal/reader"
@@ -16,15 +18,43 @@ import (
 )
 
 type App struct {
-	ctx           context.Context
-	reader        *reader.Reader
-	store         *state.Store
-	currentKey    string
-	currentFile   state.FileState
-	searchID      string
-	searchKeyword string
-	searchHits    []reader.SearchHitRef
-	language      string
+	ctx         context.Context
+	reader      *reader.Reader
+	store       *state.Store
+	currentKey  string
+	currentFile state.FileState
+	searchMu    sync.Mutex
+	search      *searchSession
+	language    string
+}
+
+type searchSession struct {
+	mu            sync.RWMutex
+	id            string
+	keyword       string
+	options       reader.SearchOptions
+	source        *reader.Reader
+	store         *searchHitStore
+	scannedOffset int64
+	fileSize      int64
+	encoding      string
+	done          bool
+	canceled      bool
+	errText       string
+	cancel        context.CancelFunc
+}
+
+type searchSessionSnapshot struct {
+	id            string
+	keyword       string
+	options       reader.SearchOptions
+	total         int
+	scannedOffset int64
+	fileSize      int64
+	encoding      string
+	done          bool
+	canceled      bool
+	errText       string
 }
 
 type OpenResult struct {
@@ -135,6 +165,7 @@ func (a *App) OpenFile(path string, encoding string, pageSize int) (OpenResult, 
 	if path == "" {
 		return OpenResult{}, errors.New(a.msg("error.selectFile"))
 	}
+	a.clearSearchSession()
 	if a.reader != nil {
 		_ = a.reader.Close()
 		a.reader = nil
@@ -145,7 +176,6 @@ func (a *App) OpenFile(path string, encoding string, pageSize int) (OpenResult, 
 		return OpenResult{}, err
 	}
 	a.reader = r
-	a.clearSearchSession()
 	meta := r.Meta()
 	a.currentKey = state.FileKey(meta.Path, meta.Size, meta.ModTime.Unix())
 
@@ -260,17 +290,22 @@ func (a *App) SearchForward(startOffset int64, keyword string) (SearchPageResult
 	if a.reader == nil {
 		return SearchPageResult{}, errors.New(a.msg("error.noFileOpen"))
 	}
-	result, err := a.reader.SearchForward(startOffset, keyword)
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return SearchPageResult{}, errors.New(a.msg("error.enterKeyword"))
+	}
+	options := reader.SearchOptions{CaseSensitive: true}
+	result, err := a.reader.SearchForwardWithOptions(startOffset, keyword, options)
 	wrapped := false
 	if errors.Is(err, reader.ErrNotFound) && startOffset > 0 {
-		result, err = a.reader.SearchForward(0, keyword)
+		result, err = a.reader.SearchForwardWithOptions(0, keyword, options)
 		wrapped = true
 	}
 	if err != nil {
 		if errors.Is(err, reader.ErrNotFound) {
 			return SearchPageResult{}, fmt.Errorf(a.msg("error.notFound"), keyword)
 		}
-		return SearchPageResult{}, err
+		return SearchPageResult{}, a.searchError(err)
 	}
 	return a.searchHitPage(result.Offset, result.ByteLength, keyword, wrapped)
 }
@@ -289,10 +324,10 @@ func (a *App) SearchStats(keyword string, limit int) (reader.SearchSummary, erro
 	if limit > 5000 {
 		limit = 5000
 	}
-	return a.reader.SearchAll(keyword, limit)
+	return a.reader.SearchAllWithOptions(keyword, limit, reader.SearchOptions{CaseSensitive: true})
 }
 
-func (a *App) StartSearch(keyword string) (reader.SearchSessionSummary, error) {
+func (a *App) StartSearch(keyword string, regex bool, caseSensitive bool) (reader.SearchSessionSummary, error) {
 	if a.reader == nil {
 		return reader.SearchSessionSummary{}, errors.New(a.msg("error.noFileOpen"))
 	}
@@ -300,22 +335,58 @@ func (a *App) StartSearch(keyword string) (reader.SearchSessionSummary, error) {
 	if keyword == "" {
 		return reader.SearchSessionSummary{}, errors.New(a.msg("error.enterKeyword"))
 	}
-	hits, err := a.reader.BuildSearchIndex(keyword)
+	options := reader.SearchOptions{Regex: regex, CaseSensitive: caseSensitive}
+	if err := a.reader.ValidateSearchOptions(keyword, options); err != nil {
+		return reader.SearchSessionSummary{}, a.searchError(err)
+	}
+	meta := a.reader.Meta()
+	searchID := fmt.Sprintf("%s:%s:%t:%t:%d", a.currentKey, keyword, regex, caseSensitive, time.Now().UnixNano())
+	store, err := newSearchHitStore()
 	if err != nil {
 		return reader.SearchSessionSummary{}, err
 	}
-	meta := a.reader.Meta()
-	a.searchID = fmt.Sprintf("%s:%s:%d", a.currentKey, keyword, time.Now().UnixNano())
-	a.searchKeyword = keyword
-	a.searchHits = hits
-	return reader.SearchSessionSummary{SearchID: a.searchID, Keyword: keyword, Total: len(hits), FileSize: meta.Size, Encoding: meta.Encoding}, nil
+	ctx, cancel := context.WithCancel(context.Background())
+	session := &searchSession{id: searchID, keyword: keyword, options: options, source: a.reader, store: store, fileSize: meta.Size, encoding: meta.Encoding, cancel: cancel}
+	a.setActiveSearchSession(session)
+	go a.runSearchSession(ctx, session)
+	return session.summary(), nil
+}
+
+func (a *App) SearchSessionStatus(searchID string) (reader.SearchSessionSummary, error) {
+	session, err := a.activeSearchSession(searchID)
+	if err != nil {
+		return reader.SearchSessionSummary{}, err
+	}
+	return session.summary(), nil
+}
+
+func (a *App) StopSearch(searchID string) (reader.SearchSessionSummary, error) {
+	session, err := a.activeSearchSession(searchID)
+	if err != nil {
+		return reader.SearchSessionSummary{}, err
+	}
+	session.mu.Lock()
+	if !session.done {
+		session.canceled = true
+		session.done = true
+	}
+	session.mu.Unlock()
+	if session.cancel != nil {
+		session.cancel()
+	}
+	summary := session.summary()
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "search:progress", summary)
+	}
+	return summary, nil
 }
 
 func (a *App) SearchHitPreviews(searchID string, offset int, limit int) (reader.SearchHitPreviewPage, error) {
 	if a.reader == nil {
 		return reader.SearchHitPreviewPage{}, errors.New(a.msg("error.noFileOpen"))
 	}
-	if err := a.validateSearchSession(searchID); err != nil {
+	session, err := a.activeSearchSession(searchID)
+	if err != nil {
 		return reader.SearchHitPreviewPage{}, err
 	}
 	if offset < 0 {
@@ -327,25 +398,35 @@ func (a *App) SearchHitPreviews(searchID string, offset int, limit int) (reader.
 	if limit > 200 {
 		limit = 200
 	}
-	hits, err := a.reader.BuildSearchHitPreviews(a.searchHits, offset, limit)
+	snapshot := session.snapshot()
+	refs, err := session.store.Window(offset, limit)
 	if err != nil {
 		return reader.SearchHitPreviewPage{}, err
 	}
-	return reader.SearchHitPreviewPage{SearchID: a.searchID, Keyword: a.searchKeyword, Offset: offset, Limit: limit, Total: len(a.searchHits), Hits: hits}, nil
+	hits, err := a.reader.BuildSearchHitPreviewsFromRefs(refs)
+	if err != nil {
+		return reader.SearchHitPreviewPage{}, err
+	}
+	return reader.SearchHitPreviewPage{SearchID: snapshot.id, Keyword: snapshot.keyword, Offset: offset, Limit: limit, Total: snapshot.total, ScannedOffset: snapshot.scannedOffset, FileSize: snapshot.fileSize, Done: snapshot.done, Canceled: snapshot.canceled, Error: snapshot.errText, Regex: snapshot.options.Regex, CaseSensitive: snapshot.options.CaseSensitive, Hits: hits}, nil
 }
 
 func (a *App) SearchHitPageByIndex(searchID string, index int) (SearchPageResult, error) {
 	if a.reader == nil {
 		return SearchPageResult{}, errors.New(a.msg("error.noFileOpen"))
 	}
-	if err := a.validateSearchSession(searchID); err != nil {
+	session, err := a.activeSearchSession(searchID)
+	if err != nil {
 		return SearchPageResult{}, err
 	}
-	if index < 0 || index >= len(a.searchHits) {
+	snapshot := session.snapshot()
+	if index < 0 || index >= snapshot.total {
 		return SearchPageResult{}, errors.New(a.msg("error.searchResultMissing"))
 	}
-	hit := a.searchHits[index]
-	return a.searchHitPageAtLine(hit.Offset, hit.ByteLength, hit.LineStart, a.searchKeyword, false)
+	hit, err := session.store.Get(index)
+	if err != nil {
+		return SearchPageResult{}, err
+	}
+	return a.searchHitPageAtLine(hit.Offset, hit.ByteLength, hit.LineStart, snapshot.keyword, false)
 }
 
 func (a *App) SearchHitPage(hitOffset int64, hitByteLength int) (SearchPageResult, error) {
@@ -353,6 +434,78 @@ func (a *App) SearchHitPage(hitOffset int64, hitByteLength int) (SearchPageResul
 		return SearchPageResult{}, errors.New(a.msg("error.noFileOpen"))
 	}
 	return a.searchHitPage(hitOffset, hitByteLength, "", false)
+}
+
+func (a *App) ExportSearchResults(searchID string) (string, error) {
+	if a.reader == nil {
+		return "", errors.New(a.msg("error.noFileOpen"))
+	}
+	session, err := a.activeSearchSession(searchID)
+	if err != nil {
+		return "", err
+	}
+	snapshot := session.snapshot()
+	if snapshot.total == 0 {
+		return "", errors.New(a.msg("error.noSearchResults"))
+	}
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           a.msg("dialog.exportSearchResults"),
+		DefaultFilename: "search-results.tsv",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "TSV Files (*.tsv)", Pattern: "*.tsv"},
+			{DisplayName: "Text Files (*.txt)", Pattern: "*.txt"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(path) == "" {
+		return "", nil
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	meta := a.reader.Meta()
+	writer := bufio.NewWriter(file)
+	defer writer.Flush()
+	status := "InProgress"
+	if snapshot.canceled {
+		status = "Canceled"
+	} else if snapshot.done {
+		status = "Complete"
+	}
+	_, _ = fmt.Fprintf(writer, "Source\t%s\n", sanitizeTSV(meta.Path))
+	_, _ = fmt.Fprintf(writer, "Encoding\t%s\n", sanitizeTSV(snapshot.encoding))
+	_, _ = fmt.Fprintf(writer, "Keyword\t%s\n", sanitizeTSV(snapshot.keyword))
+	_, _ = fmt.Fprintf(writer, "Regex\t%t\n", snapshot.options.Regex)
+	_, _ = fmt.Fprintf(writer, "CaseSensitive\t%t\n", snapshot.options.CaseSensitive)
+	_, _ = fmt.Fprintf(writer, "Status\t%s\n", status)
+	_, _ = fmt.Fprintf(writer, "ScannedOffset\t%d\n", snapshot.scannedOffset)
+	_, _ = fmt.Fprintf(writer, "FileSize\t%d\n", snapshot.fileSize)
+	_, _ = fmt.Fprintf(writer, "TotalDiscovered\t%d\n\n", snapshot.total)
+	_, _ = writer.WriteString("Index\tLine\tOffset\tByteLength\tPreview\n")
+
+	const batchSize = 200
+	for offset := 0; offset < snapshot.total; offset += batchSize {
+		refs, err := session.store.Window(offset, batchSize)
+		if err != nil {
+			return "", err
+		}
+		hits, err := a.reader.BuildSearchHitPreviewsFromRefs(refs)
+		if err != nil {
+			return "", err
+		}
+		for _, hit := range hits {
+			_, _ = fmt.Fprintf(writer, "%d\t%d\t%d\t%d\t%s\n", hit.Index+1, hit.LineNumber, hit.Offset, hit.ByteLength, sanitizeTSV(hit.LinePreview))
+		}
+	}
+	if err := writer.Flush(); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 func (a *App) searchHitPage(hitOffset int64, hitByteLength int, keyword string, wrapped bool) (SearchPageResult, error) {
@@ -441,16 +594,107 @@ func (a *App) SaveProgress(offset int64) error {
 }
 
 func (a *App) clearSearchSession() {
-	a.searchID = ""
-	a.searchKeyword = ""
-	a.searchHits = nil
+	a.searchMu.Lock()
+	session := a.search
+	a.search = nil
+	a.searchMu.Unlock()
+	cleanupSearchSession(session)
+}
+
+func (a *App) setActiveSearchSession(session *searchSession) {
+	a.searchMu.Lock()
+	old := a.search
+	a.search = session
+	a.searchMu.Unlock()
+	cleanupSearchSession(old)
+}
+
+func cleanupSearchSession(session *searchSession) {
+	if session == nil {
+		return
+	}
+	if session.cancel != nil {
+		session.cancel()
+	}
+	if session.store != nil {
+		_ = session.store.Remove()
+	}
+}
+
+func (a *App) activeSearchSession(searchID string) (*searchSession, error) {
+	a.searchMu.Lock()
+	session := a.search
+	a.searchMu.Unlock()
+	if session == nil || searchID == "" || session.id != searchID {
+		return nil, errors.New(a.msg("error.searchExpired"))
+	}
+	return session, nil
+}
+
+func (s *searchSession) summary() reader.SearchSessionSummary {
+	snapshot := s.snapshot()
+	return reader.SearchSessionSummary{SearchID: snapshot.id, Keyword: snapshot.keyword, Total: snapshot.total, ScannedOffset: snapshot.scannedOffset, FileSize: snapshot.fileSize, Encoding: snapshot.encoding, Done: snapshot.done, Canceled: snapshot.canceled, Error: snapshot.errText, Regex: snapshot.options.Regex, CaseSensitive: snapshot.options.CaseSensitive}
+}
+
+func (s *searchSession) snapshot() searchSessionSnapshot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	total := 0
+	if s.store != nil {
+		total = s.store.Count()
+	}
+	return searchSessionSnapshot{id: s.id, keyword: s.keyword, options: s.options, total: total, scannedOffset: s.scannedOffset, fileSize: s.fileSize, encoding: s.encoding, done: s.done, canceled: s.canceled, errText: s.errText}
+}
+
+func (a *App) runSearchSession(ctx context.Context, session *searchSession) {
+	lastEmit := time.Now()
+	emit := func(force bool) {
+		if a.ctx == nil || (!force && time.Since(lastEmit) < 200*time.Millisecond) {
+			return
+		}
+		lastEmit = time.Now()
+		runtime.EventsEmit(a.ctx, "search:progress", session.summary())
+	}
+	err := session.source.StreamSearchWithOptions(ctx, session.keyword, session.options, func(ref reader.SearchHitRef) error {
+		if err := session.store.Append(ref); err != nil {
+			return err
+		}
+		emit(false)
+		return nil
+	}, func(scannedOffset int64) error {
+		session.mu.Lock()
+		if scannedOffset > session.scannedOffset {
+			session.scannedOffset = scannedOffset
+		}
+		session.mu.Unlock()
+		emit(false)
+		return nil
+	})
+	session.mu.Lock()
+	if err != nil && !errors.Is(err, context.Canceled) {
+		session.errText = a.searchError(err).Error()
+	}
+	if session.scannedOffset < session.fileSize && err == nil {
+		session.scannedOffset = session.fileSize
+	}
+	if errors.Is(err, context.Canceled) {
+		session.canceled = true
+	}
+	session.done = true
+	session.mu.Unlock()
+	emit(true)
+}
+
+func (a *App) searchError(err error) error {
+	if errors.Is(err, reader.ErrEmptyRegexMatch) {
+		return errors.New(a.msg("error.regexEmptyMatch"))
+	}
+	return err
 }
 
 func (a *App) validateSearchSession(searchID string) error {
-	if a.searchID == "" || searchID == "" || searchID != a.searchID {
-		return errors.New(a.msg("error.searchExpired"))
-	}
-	return nil
+	_, err := a.activeSearchSession(searchID)
+	return err
 }
 
 func (a *App) persist() error {
@@ -476,28 +720,40 @@ func normalizeLanguage(lang string) string {
 	}
 }
 
+func sanitizeTSV(value string) string {
+	value = strings.ReplaceAll(value, "\t", " ")
+	value = strings.ReplaceAll(value, "\r", " ")
+	return strings.ReplaceAll(value, "\n", " ")
+}
+
 var localizedMessages = map[string]map[string]string{
 	"zh": {
-		"dialog.openFile":           "选择要阅读的文本文件",
-		"dialog.openFolder":         "选择文件夹",
-		"error.selectFile":          "请选择文件",
-		"error.noFileOpen":          "尚未打开文件",
-		"error.enterKeyword":        "请输入搜索关键字",
-		"error.notFound":            "没有找到：%s",
-		"error.searchResultMissing": "搜索结果不存在",
-		"error.bookmarkMissing":     "书签不存在",
-		"error.searchExpired":       "搜索结果已过期，请重新搜索",
+		"dialog.openFile":            "选择要阅读的文本文件",
+		"dialog.openFolder":          "选择文件夹",
+		"dialog.exportSearchResults": "导出搜索结果",
+		"error.selectFile":           "请选择文件",
+		"error.noFileOpen":           "尚未打开文件",
+		"error.enterKeyword":         "请输入搜索关键字",
+		"error.notFound":             "没有找到：%s",
+		"error.searchResultMissing":  "搜索结果不存在",
+		"error.bookmarkMissing":      "书签不存在",
+		"error.searchExpired":        "搜索结果已过期，请重新搜索",
+		"error.noSearchResults":      "没有可导出的搜索结果",
+		"error.regexEmptyMatch":      "正则表达式不能匹配空文本",
 	},
 	"en": {
-		"dialog.openFile":           "Select a text file to read",
-		"dialog.openFolder":         "Select folder",
-		"error.selectFile":          "Please select a file",
-		"error.noFileOpen":          "No file is open",
-		"error.enterKeyword":        "Enter a search keyword",
-		"error.notFound":            "Not found: %s",
-		"error.searchResultMissing": "Search result does not exist",
-		"error.bookmarkMissing":     "Bookmark does not exist",
-		"error.searchExpired":       "Search results expired. Search again",
+		"dialog.openFile":            "Select a text file to read",
+		"dialog.openFolder":          "Select folder",
+		"dialog.exportSearchResults": "Export search results",
+		"error.selectFile":           "Please select a file",
+		"error.noFileOpen":           "No file is open",
+		"error.enterKeyword":         "Enter a search keyword",
+		"error.notFound":             "Not found: %s",
+		"error.searchResultMissing":  "Search result does not exist",
+		"error.bookmarkMissing":      "Bookmark does not exist",
+		"error.searchExpired":        "Search results expired. Search again",
+		"error.noSearchResults":      "No search results to export",
+		"error.regexEmptyMatch":      "Regex must not match empty text",
 	},
 }
 

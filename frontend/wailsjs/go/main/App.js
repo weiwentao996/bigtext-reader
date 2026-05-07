@@ -10,6 +10,10 @@ export function DeleteBookmark(arg1) {
   return window['go']['main']['App']['DeleteBookmark'](arg1);
 }
 
+export function ExportSearchResults(arg1) {
+  return window['go']['main']['App']['ExportSearchResults'](arg1);
+}
+
 export function GoToBookmark(arg1) {
   return window['go']['main']['App']['GoToBookmark'](arg1);
 }
@@ -74,6 +78,10 @@ export function SearchHitPreviews(arg1, arg2, arg3) {
   return window['go']['main']['App']['SearchHitPreviews'](arg1, arg2, arg3);
 }
 
+export function SearchSessionStatus(arg1) {
+  return window['go']['main']['App']['SearchSessionStatus'](arg1);
+}
+
 export function SearchStats(arg1, arg2) {
   return window['go']['main']['App']['SearchStats'](arg1, arg2);
 }
@@ -90,6 +98,10 @@ export function SetLanguage(arg1) {
   return window['go']['main']['App']['SetLanguage'](arg1);
 }
 
-export function StartSearch(arg1) {
-  return window['go']['main']['App']['StartSearch'](arg1);
+export function StartSearch(arg1, arg2, arg3) {
+  return window['go']['main']['App']['StartSearch'](arg1, arg2, arg3);
+}
+
+export function StopSearch(arg1) {
+  return window['go']['main']['App']['StopSearch'](arg1);
 }
