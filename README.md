@@ -175,6 +175,8 @@ Possible future improvements:
 - Regex search.
 - Case-sensitive / case-insensitive search options.
 - Export search results.
+- AI Agent log analysis: connect to AI APIs so the app can summarize logs, identify suspicious sections, and suggest troubleshooting steps.
+- Skill extension system: allow users to create reusable analysis skills for specific log formats or business scenarios.
 - Installer package for Windows.
 - macOS and Linux release builds.
 
