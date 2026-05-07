@@ -4,6 +4,8 @@ English | [简体中文](README.zh-CN.md)
 
 Repository: [github.com/weiwentao996/bigtext-reader](https://github.com/weiwentao996/bigtext-reader)
 
+Latest version: **v1.0.1**
+
 ![BigText Reader](build/appicon.png)
 
 **BigText Reader** is a lightweight desktop reader for very large plain-text files. It is designed for GB-scale `.txt` and `.log` files that are too large for ordinary editors to open smoothly. Instead of loading the whole file into memory, it reads content on demand.
@@ -25,6 +27,8 @@ large text file reader, big text reader, huge txt reader, log file reader, GB te
 - **Bookmarks**: save, list, jump to, and delete bookmarks.
 - **Reading progress**: automatically remembers the last reading offset for each file.
 - **Folder file list**: open a folder and quickly switch between files.
+- **Drag-and-drop opening**: drag a text file into the app and open it in the current workspace.
+- **Single-instance behavior**: opening a file through Windows routes it to the existing app window instead of creating a duplicate window.
 - **Hot encoding switch**: change encoding after opening a file without restarting the app.
 - **Adjustable font size**: tune the reading font size for long reading sessions.
 - **Internationalization**: built-in Simplified Chinese and English UI.
@@ -40,6 +44,7 @@ BigText Reader is useful when you need to:
 - Read Chinese text files encoded in GBK.
 - Keep reading progress and bookmarks for long files.
 - Browse a folder of logs or text files quickly.
+- Drag a file into the app without losing the current window layout.
 
 ## Screenshots
 
@@ -73,9 +78,13 @@ BigText Reader is currently developed and tested mainly on Windows. macOS and Li
 
 ## Installation
 
-Download the latest release from [GitHub Releases](https://github.com/weiwentao996/bigtext-reader/releases) and run:
+Download the latest release from [GitHub Releases](https://github.com/weiwentao996/bigtext-reader/releases):
 
-- Windows: `bigtext-reader.exe`
+- Windows: `BigText-Reader-v1.0.1-windows-amd64.zip`
+
+Unzip the package and run `BigText-Reader-v1.0.1-windows-amd64.exe`.
+
+You can also drag a `.txt`, `.log`, or other plain-text file into the app window to open it directly.
 
 If there is no release package yet, build it from source using the steps below.
 
@@ -83,9 +92,9 @@ If there is no release package yet, build it from source using the steps below.
 
 ### Requirements
 
-- Go 1.18+
+- Go 1.22+
 - Node.js and npm
-- Wails v2 CLI
+- Wails v2.12+ CLI
 
 Install Wails if needed:
 
