@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Latest version: **v1.0.1**
+Latest version: **v1.1.1**
 
 ![BigText Reader](build/appicon.png)
 
@@ -50,23 +50,7 @@ BigText Reader is useful when you need to:
 
 ## Screenshots
 
-### Large File Reading
-
-Open and scroll through a GB-scale log file with progress, encoding, and font controls.
-
-![Large file reading](docs/screenshots/main-reader.png)
-
-### Full-File Search
-
-Search through the whole file with live scan progress. Results load as they are discovered, and an in-progress search can be stopped while keeping discovered results available for browsing or TSV export.
-
-![Full-file search results](docs/screenshots/main-search-results.png)
-
-### Bookmarks and Search
-
-Save reading positions as bookmarks and combine them with search result navigation.
-
-![Bookmarks and search](docs/screenshots/bookmarks-search.png)
+![Main app](docs/screenshots/main-reader.png)
 
 ## Search Result Export
 
