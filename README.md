@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Latest version: **v1.1.1**
+Latest version: **v1.1.0**
 
 ![BigText Reader](build/appicon.png)
 
@@ -70,9 +70,9 @@ BigText Reader is currently developed and tested mainly on Windows. macOS and Li
 
 Download the latest release from [GitHub Releases](https://github.com/weiwentao996/bigtext-reader/releases):
 
-- Windows: `BigText-Reader-v1.0.1-windows-amd64.zip`
+- Windows: `BigText-Reader-v1.1.0-windows-amd64.zip`
 
-Unzip the package and run `BigText-Reader-v1.0.1-windows-amd64.exe`.
+Unzip the package and run `BigText-Reader-v1.1.0-windows-amd64.exe`.
 
 You can also drag a `.txt`, `.log`, or other plain-text file into the app window to open it directly.
 
