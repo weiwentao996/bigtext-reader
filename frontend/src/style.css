@@ -1040,10 +1040,10 @@ button:disabled {
 
 .about-dialog {
   position: relative;
-  width: min(440px, 100%);
-  padding: 28px 30px 24px;
+  width: min(380px, 100%);
+  padding: 24px 26px 22px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--control-bg);
   box-shadow: 0 24px 60px var(--shadow);
   text-align: center;
@@ -1068,47 +1068,17 @@ button:disabled {
   color: var(--text);
 }
 
-.about-mark {
-  display: grid;
-  place-items: center;
-  width: 58px;
-  height: 58px;
-  margin: 0 auto 14px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
-  color: #ffffff;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.22);
-}
-
 .about-title {
   margin: 0;
   color: var(--text-strong);
-  font-size: 23px;
+  font-size: 22px;
   line-height: 1.2;
-}
-
-.about-tagline {
-  margin-top: 6px;
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.about-description {
-  margin: 16px 0 18px;
-  color: var(--muted-strong);
-  font-size: 13px;
-  line-height: 1.7;
-  text-align: left;
 }
 
 .about-meta {
   display: grid;
   gap: 0;
-  margin: 0;
+  margin: 18px 0 0;
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
@@ -1145,6 +1115,31 @@ button:disabled {
   min-width: 0;
   color: var(--muted-strong);
   word-break: break-word;
+}
+
+.update-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--muted-strong);
+  font-size: 12px;
+  text-align: left;
+}
+
+.update-notice[hidden] {
+  display: none;
+}
+
+.update-notice .button {
+  flex: 0 0 auto;
+  min-width: 62px;
+  height: 28px;
 }
 
 .about-actions {

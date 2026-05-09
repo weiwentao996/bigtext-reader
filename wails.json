@@ -9,5 +9,10 @@
   "author": {
     "name": "weiwt",
     "email": "taoao.wei@gmail.com"
+  },
+  "info": {
+    "companyName": "weiwt",
+    "productName": "BigText Reader",
+    "productVersion": "1.1.0"
   }
 }

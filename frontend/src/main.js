@@ -24,6 +24,7 @@ import {
   StartSearch,
 } from "../wailsjs/go/main/App";
 import {
+  BrowserOpenURL,
   EventsOn,
   OnFileDrop,
   Quit,
@@ -33,6 +34,11 @@ import {
   WindowToggleMaximise,
 } from "../wailsjs/runtime/runtime";
 
+const BUILD_VERSION = import.meta.env.VITE_APP_VERSION || "";
+const GITHUB_LATEST_RELEASE_API =
+  "https://api.github.com/repos/weiwentao996/bigtext-reader/releases/latest";
+const GITHUB_RELEASE_URL_PREFIX =
+  "https://github.com/weiwentao996/bigtext-reader/releases/";
 const LOAD_THRESHOLD_PX = 600;
 const PREFETCH_THRESHOLD_PX = 1400;
 const LEGACY_LANG_STORAGE_KEY = "bf-reader.language";
@@ -99,21 +105,14 @@ const messages = {
     "status.ready": "就绪",
     "status.about": "BigText Reader · GB 级大文本阅读器",
     "about.title": "BigText Reader",
-    "about.tagline": "GB 级大文本阅读器",
-    "about.description":
-      "面向超大 TXT / LOG 文件设计，按需读取内容，支持 UTF-8、GBK、搜索、书签和阅读进度保存。",
     "about.versionLabel": "版本",
-    "about.versionValue": "本地构建",
-    "about.stackLabel": "技术栈",
-    "about.stackValue": "Go / Wails / Vanilla JS",
-    "about.encodingLabel": "编码支持",
-    "about.encodingValue": "UTF-8 / GBK / 自动检测",
+    "about.versionValue": BUILD_VERSION || "本地构建",
     "about.authorLabel": "作者",
     "about.authorValue": "weiwt",
-    "about.emailLabel": "邮箱",
-    "about.emailValue": "taoao.wei@gmail.com",
     "about.repositoryLabel": "仓库",
     "about.repositoryValue": "github.com/weiwentao996/bigtext-reader",
+    "about.updateAvailable": "发现新版本 {version}",
+    "about.update": "更新",
     "about.close": "关闭",
     "status.opening": "正在打开文件...",
     "status.reencoding": "正在切换编码...",
@@ -193,21 +192,14 @@ const messages = {
     "status.ready": "Ready",
     "status.about": "BigText Reader · GB-scale text reader",
     "about.title": "BigText Reader",
-    "about.tagline": "GB-scale text reader",
-    "about.description":
-      "Built for very large TXT / LOG files. It reads on demand and supports UTF-8, GBK, search, bookmarks, and reading progress.",
     "about.versionLabel": "Version",
-    "about.versionValue": "Local build",
-    "about.stackLabel": "Stack",
-    "about.stackValue": "Go / Wails / Vanilla JS",
-    "about.encodingLabel": "Encoding",
-    "about.encodingValue": "UTF-8 / GBK / auto detect",
+    "about.versionValue": BUILD_VERSION || "Local build",
     "about.authorLabel": "Author",
     "about.authorValue": "weiwt",
-    "about.emailLabel": "Email",
-    "about.emailValue": "taoao.wei@gmail.com",
     "about.repositoryLabel": "Repository",
     "about.repositoryValue": "github.com/weiwentao996/bigtext-reader",
+    "about.updateAvailable": "New version {version} is available",
+    "about.update": "Update",
     "about.close": "Close",
     "status.opening": "Opening file...",
     "status.reencoding": "Switching encoding...",
@@ -451,18 +443,16 @@ app.innerHTML = `
     <div id="aboutOverlay" class="about-overlay" aria-hidden="true">
       <section class="about-dialog" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
         <button id="aboutCloseIcon" class="about-close-icon" type="button" aria-label="Close">×</button>
-        <div class="about-mark">BF</div>
         <h2 id="aboutTitle" class="about-title" data-i18n="about.title">BigText Reader</h2>
-        <div class="about-tagline" data-i18n="about.tagline">GB 级大文本阅读器</div>
-        <p class="about-description" data-i18n="about.description">面向超大 TXT / LOG 文件设计，按需读取内容，支持 UTF-8、GBK、搜索、书签和阅读进度保存。</p>
         <dl class="about-meta">
           <div><dt data-i18n="about.versionLabel">版本</dt><dd data-i18n="about.versionValue">本地构建</dd></div>
-          <div><dt data-i18n="about.stackLabel">技术栈</dt><dd data-i18n="about.stackValue">Go / Wails / Vanilla JS</dd></div>
-          <div><dt data-i18n="about.encodingLabel">编码支持</dt><dd data-i18n="about.encodingValue">UTF-8 / GBK / 自动检测</dd></div>
           <div><dt data-i18n="about.authorLabel">作者</dt><dd data-i18n="about.authorValue">weiwt</dd></div>
-          <div><dt data-i18n="about.emailLabel">邮箱</dt><dd data-i18n="about.emailValue">taoao.wei@gmail.com</dd></div>
           <div><dt data-i18n="about.repositoryLabel">仓库</dt><dd data-i18n="about.repositoryValue">github.com/weiwentao996/bigtext-reader</dd></div>
         </dl>
+        <div id="updateNotice" class="update-notice" hidden>
+          <span id="updateText"></span>
+          <button id="updateButton" class="button primary" type="button" data-i18n="about.update">更新</button>
+        </div>
         <div class="about-actions">
           <button id="aboutCloseButton" class="button primary" type="button" data-i18n="about.close">关闭</button>
         </div>
@@ -513,6 +503,8 @@ const state = {
   searchAutoJumpPending: false,
   searchPollTimer: null,
   searchPanelVisible: false,
+  updateInfo: null,
+  updateCheckStarted: false,
   searchVirtual: {
     rowHeight: 42,
     pageSize: 100,
@@ -537,6 +529,9 @@ const el = {
   aboutOverlay: document.querySelector("#aboutOverlay"),
   aboutCloseIcon: document.querySelector("#aboutCloseIcon"),
   aboutCloseButton: document.querySelector("#aboutCloseButton"),
+  updateNotice: document.querySelector("#updateNotice"),
+  updateText: document.querySelector("#updateText"),
+  updateButton: document.querySelector("#updateButton"),
   languageSelect: document.querySelector("#languageSelect"),
   openFileButton: document.querySelector("#openFileButton"),
   openFolderButton: document.querySelector("#openFolderButton"),
@@ -595,6 +590,7 @@ el.menuReload.addEventListener("click", () => run(openCurrentFile));
 el.aboutButton.addEventListener("click", showAboutDialog);
 el.aboutCloseIcon.addEventListener("click", hideAboutDialog);
 el.aboutCloseButton.addEventListener("click", hideAboutDialog);
+el.updateButton.addEventListener("click", openUpdatePage);
 el.aboutOverlay.addEventListener("click", (event) => {
   if (event.target === el.aboutOverlay) hideAboutDialog();
 });
@@ -640,7 +636,9 @@ el.themeSelect.value = state.theme;
 applyFontSize();
 applyTheme();
 applyLocale();
+renderUpdateNotice();
 run(() => SetLanguage(state.language));
+checkForUpdate();
 EventsOn("app:open-file", (path) => run(() => openFilePath(path)));
 EventsOn("search:progress", (summary) => run(() => handleSearchProgress(summary)));
 OnFileDrop((_x, _y, paths) => run(() => openFilePath(paths?.[0])), false);
@@ -675,6 +673,7 @@ async function changeLanguage() {
   renderBookmarks();
   renderFolderFiles();
   renderSearchResults();
+  renderUpdateNotice();
   updateVisibleProgress();
 }
 
@@ -731,6 +730,7 @@ function closeMenus() {
 
 function showAboutDialog() {
   closeMenus();
+  renderUpdateNotice();
   el.aboutOverlay.classList.add("open");
   el.aboutOverlay.setAttribute("aria-hidden", "false");
   el.aboutCloseButton.focus();
@@ -740,6 +740,70 @@ function showAboutDialog() {
 function hideAboutDialog() {
   el.aboutOverlay.classList.remove("open");
   el.aboutOverlay.setAttribute("aria-hidden", "true");
+}
+
+async function checkForUpdate() {
+  if (state.updateCheckStarted || !BUILD_VERSION) return;
+  state.updateCheckStarted = true;
+  try {
+    const response = await fetch(GITHUB_LATEST_RELEASE_API, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!response.ok) return;
+    const release = await response.json();
+    const latestVersion = normalizeVersion(release?.tag_name);
+    const releaseUrl = trustedReleaseUrl(release?.html_url);
+    if (
+      !latestVersion ||
+      !releaseUrl ||
+      !isNewerVersion(latestVersion, BUILD_VERSION)
+    )
+      return;
+    state.updateInfo = {
+      version: release.tag_name || latestVersion,
+      url: releaseUrl,
+    };
+    renderUpdateNotice();
+  } catch (error) {
+    console.debug(error);
+  }
+}
+
+function renderUpdateNotice() {
+  if (!state.updateInfo) {
+    el.updateNotice.hidden = true;
+    return;
+  }
+  el.updateText.textContent = t("about.updateAvailable", {
+    version: state.updateInfo.version,
+  });
+  el.updateNotice.hidden = false;
+}
+
+function openUpdatePage() {
+  if (!state.updateInfo?.url) return;
+  BrowserOpenURL(state.updateInfo.url);
+}
+
+function normalizeVersion(version) {
+  const match = String(version || "").trim().match(/^v?(\d+)\.(\d+)\.(\d+)$/i);
+  return match ? `${match[1]}.${match[2]}.${match[3]}` : "";
+}
+
+function isNewerVersion(latest, current) {
+  const latestParts = normalizeVersion(latest).split(".").map(Number);
+  const currentParts = normalizeVersion(current).split(".").map(Number);
+  if (latestParts.length !== 3 || currentParts.length !== 3) return false;
+  for (let index = 0; index < latestParts.length; index++) {
+    if (latestParts[index] > currentParts[index]) return true;
+    if (latestParts[index] < currentParts[index]) return false;
+  }
+  return false;
+}
+
+function trustedReleaseUrl(url) {
+  const value = String(url || "");
+  return value.startsWith(GITHUB_RELEASE_URL_PREFIX) ? value : "";
 }
 
 function changeFontSize() {
